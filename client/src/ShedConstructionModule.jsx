@@ -20,6 +20,7 @@ export const SHED_CONSTRUCTION_CATEGORIES = [
   'Fencing',
   'Equipment & Fittings',
   'Transport',
+  'Food',
   'Other',
 ];
 
