@@ -36,4 +36,7 @@ export const authApi = {
   resetPassword: (id, password) => authRequest(`/api/users/${id}/password`, {
     method: 'PATCH', body: JSON.stringify({ password }),
   }),
+  updateUserModules: (id, allowedModules) => authRequest(`/api/users/${id}/modules`, {
+    method: 'PATCH', body: JSON.stringify({ allowedModules }),
+  }),
 };

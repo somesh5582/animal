@@ -175,6 +175,7 @@ export async function initializeSchema() {
       password_hash VARCHAR(255) NOT NULL,
       role VARCHAR(10) NOT NULL,
       is_active TINYINT NOT NULL DEFAULT 1,
+      allowed_modules TEXT NULL,
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       CHECK (role IN ('admin', 'staff')),
@@ -223,8 +224,20 @@ export async function initializeSchema() {
     for (const [table, name, columns] of indexStatements) {
       await createIndexIfMissing(connection, table, name, columns);
     }
+    await addColumnIfMissing(connection, 'users', 'allowed_modules', 'TEXT NULL');
   } finally {
     connection.release();
+  }
+}
+
+async function addColumnIfMissing(connection, table, column, definition) {
+  const [rows] = await connection.query(
+    `SELECT COUNT(*) AS n FROM information_schema.columns
+     WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?`,
+    [table, column],
+  );
+  if (rows[0].n === 0) {
+    await connection.query(`ALTER TABLE \`${table}\` ADD COLUMN \`${column}\` ${definition}`);
   }
 }
 

@@ -1034,3 +1034,46 @@ td strong { color: var(--ink); }
   .invoice-table { min-width: 0 !important; width: 100%; }
   .invoice-table th, .invoice-table td { color: #111 !important; font-size: 10px; }
 }
+
+/* Per-user module access controls (Users module) */
+.module-access {
+  margin-top: 1rem;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+}
+.module-access__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.65rem;
+}
+.module-access__head > span {
+  font-weight: 600;
+  display: flex;
+  flex-direction: column;
+}
+.module-access__head small {
+  font-weight: 400;
+  opacity: 0.7;
+}
+.module-access__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.4rem 1rem;
+}
+.module-access__item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+.module-access-note {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 1rem;
+  opacity: 0.75;
+}

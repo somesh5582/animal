@@ -8,7 +8,7 @@ import ReportsPage from './reports/ReportsPage.jsx';
 import { RoomAssignmentForm, RoomForm, RoomsPage } from './RoomModule.jsx';
 import { ShedConstructionForm, ShedConstructionPage } from './ShedConstructionModule.jsx';
 import { TreatmentForm, TreatmentPage } from './TreatmentModule.jsx';
-import { ResetPasswordForm, UserForm, UsersPage } from './UserModule.jsx';
+import { EditAccessForm, ResetPasswordForm, UserForm, UsersPage } from './UserModule.jsx';
 import { WeightForm, WeightPage } from './WeightModule.jsx';
 
 const currency = import.meta.env.VITE_CURRENCY || 'INR';
@@ -101,9 +101,12 @@ function Brand({ compact = false }) {
   );
 }
 
-function NavItems({ activePage, currentUser, onNavigate, mobile = false }) {
+function NavItems({ activePage, currentUser, canAccess, onNavigate, mobile = false }) {
   const itemRefs = useRef([]);
-  const availableNavigation = navigation.filter((item) => !item.adminOnly || currentUser?.role === 'admin');
+  const availableNavigation = navigation.filter((item) => {
+    if (item.adminOnly) return currentUser?.role === 'admin';
+    return canAccess ? canAccess(item.id) : true;
+  });
 
   useEffect(() => {
     const activeIndex = availableNavigation.findIndex((item) => item.id === activePage);
@@ -738,6 +741,16 @@ function SaleInvoice({ onClose, sale }) {
 
 export default function App({ currentUser, onLogout }) {
   const canManage = currentUser?.role === 'admin';
+  // Admins and legacy users (null allowedModules) see everything. Dashboard and
+  // the admin-only Users page are handled separately. Staff see only granted modules.
+  const allowedModules = currentUser?.allowedModules ?? null;
+  const canAccess = useCallback((moduleId) => {
+    if (currentUser?.role === 'admin') return true;
+    if (moduleId === 'dashboard') return true;
+    if (moduleId === 'users') return false;
+    if (allowedModules == null) return true;
+    return allowedModules.includes(moduleId);
+  }, [currentUser, allowedModules]);
   const [activePage, setActivePage] = useState('dashboard');
   const [dashboard, setDashboard] = useState(emptyDashboard);
   const [purchases, setPurchases] = useState([]);
@@ -763,38 +776,40 @@ export default function App({ currentUser, onLogout }) {
   const [userRefreshKey, setUserRefreshKey] = useState(0);
 
   const loadData = useCallback(async () => {
+    setError('');
+    // Only request modules the current user can access; a staff user without a
+    // module would otherwise get a 403 that rejects the whole batch. Each fetch
+    // is independent so one failure doesn't blank the rest.
+    const tasks = [
+      ['dashboard', () => api.getDashboard(), setDashboard, emptyDashboard],
+      ['purchases', () => api.getPurchases(), setPurchases, []],
+      ['sales', () => api.getSales(), setSales, []],
+      ['inventory', () => api.getInventory(), setInventory, []],
+      ['weights', () => api.getWeights(), setWeights, []],
+      ['treatments', () => api.getTreatments(), setTreatments, []],
+      ['feeds', () => api.getFeeds(), setFeeds, []],
+      ['rooms', () => api.getRooms(), setRooms, []],
+      ['rooms', () => api.getRoomAssignments(), setRoomAssignments, []],
+      ['expenditures', () => api.getExpenditures(), setExpenditures, []],
+      ['shed-constructions', () => api.getShedConstructions(), setShedConstructions, []],
+    ];
     try {
-      setError('');
-      const [nextDashboard, nextPurchases, nextSales, nextInventory, nextWeights, nextTreatments, nextFeeds, nextRooms, nextRoomAssignments, nextExpenditures, nextShedConstructions] = await Promise.all([
-        api.getDashboard(),
-        api.getPurchases(),
-        api.getSales(),
-        api.getInventory(),
-        api.getWeights(),
-        api.getTreatments(),
-        api.getFeeds(),
-        api.getRooms(),
-        api.getRoomAssignments(),
-        api.getExpenditures(),
-        api.getShedConstructions(),
-      ]);
-      setDashboard(nextDashboard);
-      setPurchases(nextPurchases);
-      setSales(nextSales);
-      setInventory(nextInventory);
-      setWeights(nextWeights);
-      setTreatments(nextTreatments);
-      setFeeds(nextFeeds);
-      setRooms(nextRooms);
-      setRoomAssignments(nextRoomAssignments);
-      setExpenditures(nextExpenditures);
-      setShedConstructions(nextShedConstructions);
-    } catch (loadError) {
-      setError(loadError.message);
+      await Promise.all(tasks.map(async ([moduleId, fetcher, setter, fallback]) => {
+        if (!canAccess(moduleId)) {
+          setter(fallback);
+          return;
+        }
+        try {
+          setter(await fetcher());
+        } catch {
+          // A denied or failed module should not break the rest of the app.
+          setter(fallback);
+        }
+      }));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [canAccess]);
 
   useEffect(() => { loadData(); }, [loadData]);
   useEffect(() => {
@@ -803,7 +818,9 @@ export default function App({ currentUser, onLogout }) {
       setUserModal(null);
       if (activePage === 'users') setActivePage('dashboard');
     }
-  }, [activePage, canManage]);
+    // Bounce staff away from any module they are not allowed to view.
+    if (!canAccess(activePage)) setActivePage('dashboard');
+  }, [activePage, canManage, canAccess]);
   useEffect(() => {
     if (!notice) return undefined;
     const timeout = window.setTimeout(() => setNotice(''), 3500);
@@ -1033,7 +1050,7 @@ export default function App({ currentUser, onLogout }) {
     <div className="app-shell">
       <aside className="sidebar">
         <Brand />
-        <nav aria-label="Main navigation"><NavItems activePage={activePage} currentUser={currentUser} onNavigate={setActivePage} /></nav>
+        <nav aria-label="Main navigation"><NavItems activePage={activePage} canAccess={canAccess} currentUser={currentUser} onNavigate={setActivePage} /></nav>
         <div className="sidebar__account">
           <span className="sidebar__avatar">{currentUser.displayName.slice(0, 1).toUpperCase()}</span>
           <div><strong>{currentUser.displayName}</strong><small>{currentUser.role}</small></div>
@@ -1063,24 +1080,24 @@ export default function App({ currentUser, onLogout }) {
           ) : (
             <>
               {activePage === 'dashboard' && <Dashboard canManage={canManage} dashboard={dashboard} inventory={inventory} onAddPurchase={() => setModal('purchase')} onAddSale={() => setModal('sale')} purchases={purchases} sales={sales} />}
-              {activePage === 'analytics' && <AnalyticsDashboard assignments={roomAssignments} dashboard={dashboard} inventory={inventory} purchases={purchases} rooms={rooms} sales={sales} weights={weights} />}
-              {activePage === 'purchases' && <PurchasesPage canManage={canManage} onAdd={() => setModal('purchase')} onDelete={removePurchase} purchases={purchases} />}
-              {activePage === 'sales' && <SalesPage canManage={canManage} onAdd={inventory.length > 0 ? () => setModal('sale') : null} onDelete={removeSale} onViewInvoice={setInvoiceSale} sales={sales} />}
-              {activePage === 'expenditures' && <ExpenditurePage canManage={canManage} expenditures={expenditures} onAdd={() => setModal('expenditure')} onDelete={removeExpenditure} />}
-              {activePage === 'shed-constructions' && <ShedConstructionPage canManage={canManage} entries={shedConstructions} onAdd={() => setModal('shed-construction')} onDelete={removeShedConstruction} />}
-              {activePage === 'inventory' && <InventoryPage canManage={canManage} inventory={inventory} onAddPurchase={() => setModal('purchase')} onAddSale={(batchId) => setModal(`sale:${batchId}`)} />}
-              {activePage === 'rooms' && <RoomsPage assignments={roomAssignments} canManage={canManage} inventory={inventory} onAddRoom={() => openRoom()} onAssign={openRoomAssignment} onDeleteRoom={removeRoom} onEditRoom={openRoom} onMove={openRoomAssignment} onUnassign={unassignRoom} rooms={rooms} weights={weights} />}
-              {activePage === 'feeds' && <FeedPage canManage={canManage} feeds={feeds} inventory={inventory} onAdd={openFeed} onDelete={removeFeed} />}
-              {activePage === 'weights' && <WeightPage canManage={canManage} inventory={inventory} onAdd={() => openWeight()} onDelete={removeWeight} onEdit={openWeight} weights={weights} />}
-              {activePage === 'treatments' && <TreatmentPage canManage={canManage} inventory={inventory} onAdd={() => setModal('treatment')} onDelete={removeTreatment} treatments={treatments} />}
-              {activePage === 'reports' && <ReportsPage />}
-              {activePage === 'users' && currentUser.role === 'admin' && <UsersPage currentUser={currentUser} key={userRefreshKey} onAdd={() => setUserModal({ type: 'create' })} onReset={(user, refresh) => setUserModal({ type: 'reset', user, refresh })} />}
+              {activePage === 'analytics' && canAccess('analytics') && <AnalyticsDashboard assignments={roomAssignments} dashboard={dashboard} inventory={inventory} purchases={purchases} rooms={rooms} sales={sales} weights={weights} />}
+              {activePage === 'purchases' && canAccess('purchases') && <PurchasesPage canManage={canManage} onAdd={() => setModal('purchase')} onDelete={removePurchase} purchases={purchases} />}
+              {activePage === 'sales' && canAccess('sales') && <SalesPage canManage={canManage} onAdd={inventory.length > 0 ? () => setModal('sale') : null} onDelete={removeSale} onViewInvoice={setInvoiceSale} sales={sales} />}
+              {activePage === 'expenditures' && canAccess('expenditures') && <ExpenditurePage canManage={canManage} expenditures={expenditures} onAdd={() => setModal('expenditure')} onDelete={removeExpenditure} />}
+              {activePage === 'shed-constructions' && canAccess('shed-constructions') && <ShedConstructionPage canManage={canManage} entries={shedConstructions} onAdd={() => setModal('shed-construction')} onDelete={removeShedConstruction} />}
+              {activePage === 'inventory' && canAccess('inventory') && <InventoryPage canManage={canManage} inventory={inventory} onAddPurchase={() => setModal('purchase')} onAddSale={(batchId) => setModal(`sale:${batchId}`)} />}
+              {activePage === 'rooms' && canAccess('rooms') && <RoomsPage assignments={roomAssignments} canManage={canManage} inventory={inventory} onAddRoom={() => openRoom()} onAssign={openRoomAssignment} onDeleteRoom={removeRoom} onEditRoom={openRoom} onMove={openRoomAssignment} onUnassign={unassignRoom} rooms={rooms} weights={weights} />}
+              {activePage === 'feeds' && canAccess('feeds') && <FeedPage canManage={canManage} feeds={feeds} inventory={inventory} onAdd={openFeed} onDelete={removeFeed} />}
+              {activePage === 'weights' && canAccess('weights') && <WeightPage canManage={canManage} inventory={inventory} onAdd={() => openWeight()} onDelete={removeWeight} onEdit={openWeight} weights={weights} />}
+              {activePage === 'treatments' && canAccess('treatments') && <TreatmentPage canManage={canManage} inventory={inventory} onAdd={() => setModal('treatment')} onDelete={removeTreatment} treatments={treatments} />}
+              {activePage === 'reports' && canAccess('reports') && <ReportsPage />}
+              {activePage === 'users' && currentUser.role === 'admin' && <UsersPage currentUser={currentUser} key={userRefreshKey} onAdd={() => setUserModal({ type: 'create' })} onEditAccess={(user, refresh) => setUserModal({ type: 'access', user, refresh })} onReset={(user, refresh) => setUserModal({ type: 'reset', user, refresh })} />}
             </>
           )}
         </main>
       </div>
 
-      <nav aria-label="Mobile navigation" className="mobile-nav"><NavItems activePage={activePage} currentUser={currentUser} mobile onNavigate={setActivePage} /></nav>
+      <nav aria-label="Mobile navigation" className="mobile-nav"><NavItems activePage={activePage} canAccess={canAccess} currentUser={currentUser} mobile onNavigate={setActivePage} /></nav>
 
       {canManage && modal && (
         <div className="modal-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setModal(null); }} role="presentation">
@@ -1121,7 +1138,9 @@ export default function App({ currentUser, onLogout }) {
           <section aria-modal="true" className="modal" role="dialog">
             {userModal.type === 'create'
               ? <UserForm onClose={() => setUserModal(null)} onCreated={() => { setUserModal(null); setUserRefreshKey((value) => value + 1); }} />
-              : <ResetPasswordForm onClose={() => setUserModal(null)} onReset={async () => { setUserModal(null); await userModal.refresh?.(); }} user={userModal.user} />}
+              : userModal.type === 'access'
+                ? <EditAccessForm onClose={() => setUserModal(null)} onSaved={async () => { setUserModal(null); await userModal.refresh?.(); }} user={userModal.user} />
+                : <ResetPasswordForm onClose={() => setUserModal(null)} onReset={async () => { setUserModal(null); await userModal.refresh?.(); }} user={userModal.user} />}
           </section>
         </div>
       )}

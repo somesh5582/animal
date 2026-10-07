@@ -13,6 +13,18 @@ const SESSION_DAYS = Number.isFinite(Number(process.env.SESSION_DAYS))
   : 7;
 export const SESSION_COOKIE = 'csr_agro_session';
 
+// allowed_modules is stored as a JSON array string. NULL means "all modules"
+// (the default for admins and for staff created before this feature existed).
+function parseAllowedModules(value) {
+  if (value == null) return null;
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter((item) => typeof item === 'string') : null;
+  } catch {
+    return null;
+  }
+}
+
 function publicUser(row) {
   if (!row) return null;
   return {
@@ -21,6 +33,8 @@ function publicUser(row) {
     displayName: row.displayName,
     role: row.role,
     isActive: Boolean(row.isActive),
+    // Admins are always unrestricted; expose null so the client treats them as full access.
+    allowedModules: row.role === 'admin' ? null : parseAllowedModules(row.allowedModules),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -57,7 +71,8 @@ export async function findUserForLogin(username) {
   const [rows] = await pool.query(
     `SELECT
       id, username, display_name AS displayName, password_hash AS passwordHash,
-      role, is_active AS isActive, created_at AS createdAt, updated_at AS updatedAt
+      role, is_active AS isActive, allowed_modules AS allowedModules,
+      created_at AS createdAt, updated_at AS updatedAt
     FROM users
     WHERE username = ?`,
     [username],
@@ -69,7 +84,8 @@ export async function listUsers() {
   const [rows] = await pool.query(`
     SELECT
       id, username, display_name AS displayName, role,
-      is_active AS isActive, created_at AS createdAt, updated_at AS updatedAt
+      is_active AS isActive, allowed_modules AS allowedModules,
+      created_at AS createdAt, updated_at AS updatedAt
     FROM users
     ORDER BY CASE role WHEN 'admin' THEN 0 ELSE 1 END, username
   `);
@@ -80,7 +96,8 @@ export async function getUser(id) {
   const [rows] = await pool.query(
     `SELECT
       id, username, display_name AS displayName, role,
-      is_active AS isActive, created_at AS createdAt, updated_at AS updatedAt
+      is_active AS isActive, allowed_modules AS allowedModules,
+      created_at AS createdAt, updated_at AS updatedAt
     FROM users
     WHERE id = ?`,
     [id],
@@ -88,13 +105,20 @@ export async function getUser(id) {
   return publicUser(rows[0]);
 }
 
-export async function insertUser({ username, displayName, passwordHash, role }) {
+// Staff store an explicit module list; admins are unrestricted (stored as NULL).
+function serializeAllowedModules(role, allowedModules) {
+  if (role === 'admin') return null;
+  if (!Array.isArray(allowedModules)) return null;
+  return JSON.stringify(allowedModules.filter((item) => typeof item === 'string'));
+}
+
+export async function insertUser({ username, displayName, passwordHash, role, allowedModules }) {
   let result;
   try {
     [result] = await pool.query(
-      `INSERT INTO users (username, display_name, password_hash, role)
-       VALUES (?, ?, ?, ?)`,
-      [username, displayName, passwordHash, role],
+      `INSERT INTO users (username, display_name, password_hash, role, allowed_modules)
+       VALUES (?, ?, ?, ?, ?)`,
+      [username, displayName, passwordHash, role, serializeAllowedModules(role, allowedModules)],
     );
   } catch (error) {
     if (isDuplicateError(error)) {
@@ -104,6 +128,15 @@ export async function insertUser({ username, displayName, passwordHash, role }) 
     throw error;
   }
   return getUser(result.insertId);
+}
+
+export async function updateUserModules(id, allowedModules) {
+  const [result] = await pool.query(
+    `UPDATE users SET allowed_modules = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+    [serializeAllowedModules('staff', allowedModules), id],
+  );
+  if (!result.affectedRows) return null;
+  return getUser(id);
 }
 
 export async function createSession(userId) {
@@ -123,7 +156,8 @@ export async function findSessionUser(token) {
   const [rows] = await pool.query(
     `SELECT
       u.id, u.username, u.display_name AS displayName, u.role,
-      u.is_active AS isActive, u.created_at AS createdAt, u.updated_at AS updatedAt,
+      u.is_active AS isActive, u.allowed_modules AS allowedModules,
+      u.created_at AS createdAt, u.updated_at AS updatedAt,
       s.expires_at AS expiresAt
     FROM sessions s
     JOIN users u ON u.id = s.user_id

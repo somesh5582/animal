@@ -13,6 +13,7 @@ import {
   listUsers,
   updatePassword,
   updateUserActive,
+  updateUserModules,
   userCount,
   verifyPassword,
 } from './auth.js';
@@ -119,6 +120,19 @@ function requireAdmin(request, response, next) {
     return;
   }
   next();
+}
+
+// Gate a module's read routes. Admins always pass. Staff pass when their
+// allowedModules list includes the module id. A null list (legacy users or
+// admins) means unrestricted access.
+function requireModuleAccess(moduleId) {
+  return (request, response, next) => {
+    const user = request.user;
+    if (user?.role === 'admin') return next();
+    const modules = user?.allowedModules;
+    if (modules == null || modules.includes(moduleId)) return next();
+    response.status(403).json({ message: 'You do not have access to this module.' });
+  };
 }
 
 function httpError(status, message) {
@@ -376,12 +390,57 @@ function userRole(value) {
   return value;
 }
 
+// Canonical module ids a staff user can be granted access to. Must match the
+// client navigation ids in client/src/App.jsx. 'dashboard' is always available
+// and 'users' is admin-only, so neither is a grantable staff module here.
+const ACCESS_MODULES = [
+  'analytics',
+  'purchases',
+  'sales',
+  'expenditures',
+  'inventory',
+  'rooms',
+  'shed-constructions',
+  'feeds',
+  'weights',
+  'treatments',
+  'reports',
+];
+
+// Parse the raw allowed_modules JSON string from a DB row. NULL -> null (full access).
+function parseStoredModules(value) {
+  if (value == null) return null;
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter((item) => typeof item === 'string') : null;
+  } catch {
+    return null;
+  }
+}
+
+function allowedModules(value) {
+  if (value == null) return [];
+  if (!Array.isArray(value)) {
+    throw httpError(400, 'Allowed modules must be a list.');
+  }
+  const unique = [...new Set(value)];
+  for (const moduleId of unique) {
+    if (!ACCESS_MODULES.includes(moduleId)) {
+      throw httpError(400, `Unknown module: ${moduleId}.`);
+    }
+  }
+  return unique;
+}
+
 function parseUser(body = {}, defaultRole = 'staff') {
+  const role = userRole(body.role ?? defaultRole);
   return {
     username: username(body.username),
     displayName: requiredText(body.displayName, 'Display name', 100),
     password: password(body.password),
-    role: userRole(body.role ?? defaultRole),
+    role,
+    // Admins are unrestricted; only staff carry an explicit module list.
+    allowedModules: role === 'staff' ? allowedModules(body.allowedModules) : null,
   };
 }
 
@@ -418,6 +477,9 @@ app.post('/api/auth/login', async (request, response) => {
       displayName: userRecord.displayName,
       role: userRecord.role,
       isActive: true,
+      allowedModules: userRecord.role === 'admin'
+        ? null
+        : parseStoredModules(userRecord.allowedModules),
       createdAt: userRecord.createdAt,
       updatedAt: userRecord.updatedAt,
     },
@@ -473,6 +535,18 @@ app.patch('/api/users/:id/password', requireAdmin, async (request, response) => 
   response.json(user);
 });
 
+app.patch('/api/users/:id/modules', requireAdmin, async (request, response) => {
+  const userId = parseId(request.params.id);
+  const modules = allowedModules(request.body?.allowedModules);
+  const target = (await listUsers()).find((user) => user.id === userId);
+  if (!target) throw httpError(404, 'User not found.');
+  if (target.role === 'admin') {
+    throw httpError(409, 'Administrators have access to all modules and cannot be restricted.');
+  }
+  const user = await updateUserModules(userId, modules);
+  response.json(user);
+});
+
 app.get('/api/health', (_request, response) => {
   response.json({ status: 'ok' });
 });
@@ -481,7 +555,7 @@ app.get('/api/dashboard', async (_request, response) => {
   response.json(await getDashboard());
 });
 
-app.get('/api/purchases', async (_request, response) => {
+app.get('/api/purchases', requireModuleAccess('purchases'), async (_request, response) => {
   response.json(await listPurchases());
 });
 
@@ -512,11 +586,11 @@ app.delete('/api/purchases/:id', requireAdmin, async (request, response) => {
   response.status(204).end();
 });
 
-app.get('/api/inventory', async (_request, response) => {
+app.get('/api/inventory', requireModuleAccess('inventory'), async (_request, response) => {
   response.json(await listInventory());
 });
 
-app.get('/api/sales', async (_request, response) => {
+app.get('/api/sales', requireModuleAccess('sales'), async (_request, response) => {
   response.json(await listSales());
 });
 
@@ -533,7 +607,7 @@ app.delete('/api/sales/:id', requireAdmin, async (request, response) => {
   response.status(204).end();
 });
 
-app.get('/api/weights', async (_request, response) => {
+app.get('/api/weights', requireModuleAccess('weights'), async (_request, response) => {
   response.json(await listWeights());
 });
 
@@ -558,7 +632,7 @@ app.delete('/api/weights/:id', requireAdmin, async (request, response) => {
   response.status(204).end();
 });
 
-app.get('/api/treatments', async (_request, response) => {
+app.get('/api/treatments', requireModuleAccess('treatments'), async (_request, response) => {
   response.json(await listTreatments());
 });
 
@@ -575,7 +649,7 @@ app.delete('/api/treatments/:id', requireAdmin, async (request, response) => {
   response.status(204).end();
 });
 
-app.get('/api/feeds', async (_request, response) => {
+app.get('/api/feeds', requireModuleAccess('feeds'), async (_request, response) => {
   response.json(await listFeeds());
 });
 
@@ -592,7 +666,7 @@ app.delete('/api/feeds/:id', requireAdmin, async (request, response) => {
   response.status(204).end();
 });
 
-app.get('/api/rooms', async (_request, response) => {
+app.get('/api/rooms', requireModuleAccess('rooms'), async (_request, response) => {
   response.json(await listRooms());
 });
 
@@ -620,7 +694,7 @@ app.delete('/api/rooms/:id', requireAdmin, async (request, response) => {
   response.status(204).end();
 });
 
-app.get('/api/room-assignments', async (_request, response) => {
+app.get('/api/room-assignments', requireModuleAccess('rooms'), async (_request, response) => {
   response.json(await listRoomAssignments());
 });
 
@@ -645,7 +719,7 @@ app.delete('/api/room-assignments/:id', requireAdmin, async (request, response) 
   response.status(204).end();
 });
 
-app.get('/api/expenditures', async (_request, response) => {
+app.get('/api/expenditures', requireModuleAccess('expenditures'), async (_request, response) => {
   response.json(await listExpenditures());
 });
 
@@ -666,7 +740,7 @@ app.get('/api/shed-constructions/categories', (_request, response) => {
   response.json(SHED_CONSTRUCTION_CATEGORIES);
 });
 
-app.get('/api/shed-constructions', async (_request, response) => {
+app.get('/api/shed-constructions', requireModuleAccess('shed-constructions'), async (_request, response) => {
   response.json(await listShedConstructions());
 });
 
