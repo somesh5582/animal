@@ -36,8 +36,8 @@ function AuthForm({ mode, onAuthenticated }) {
       <div className="auth-fields">
         {setup && <label className="field"><span>Display name</span><input autoFocus maxLength="100" name="displayName" onChange={change} placeholder="Administrator name" required value={form.displayName} /></label>}
         <label className="field"><span>Username</span><input autoComplete="username" autoFocus={!setup} maxLength="60" minLength="3" name="username" onChange={change} pattern="[A-Za-z0-9._-]+" placeholder="Username" required value={form.username} /></label>
-        <label className="field"><span>Password</span><input autoComplete={setup ? 'new-password' : 'current-password'} maxLength="128" minLength="10" name="password" onChange={change} placeholder="Minimum 10 characters" required type="password" value={form.password} /></label>
-        {setup && <label className="field"><span>Confirm password</span><input autoComplete="new-password" maxLength="128" minLength="10" name="confirmPassword" onChange={change} placeholder="Enter password again" required type="password" value={form.confirmPassword} /></label>}
+        <label className="field"><span>Password</span><input autoComplete={setup ? 'new-password' : 'current-password'} maxLength="128" minLength="6" name="password" onChange={change} placeholder="Minimum 6 characters" required type="password" value={form.password} /></label>
+        {setup && <label className="field"><span>Confirm password</span><input autoComplete="new-password" maxLength="128" minLength="6" name="confirmPassword" onChange={change} placeholder="Enter password again" required type="password" value={form.confirmPassword} /></label>}
       </div>
       <button className="button button--primary button--full auth-submit" disabled={saving} type="submit">{saving ? 'Please wait…' : setup ? 'Create admin and continue' : 'Sign in'} <Icon name="arrow" size={17} /></button>
       <p className="auth-security-note">Passwords are securely hashed. Sessions use protected HTTP-only cookies.</p>

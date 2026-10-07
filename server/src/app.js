@@ -377,8 +377,8 @@ function username(value) {
 }
 
 function password(value) {
-  if (typeof value !== 'string' || value.length < 10 || value.length > 128) {
-    throw httpError(400, 'Password must be between 10 and 128 characters.');
+  if (typeof value !== 'string' || value.length < 6 || value.length > 128) {
+    throw httpError(400, 'Password must be between 6 and 128 characters.');
   }
   return value;
 }

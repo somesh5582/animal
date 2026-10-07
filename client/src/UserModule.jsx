@@ -131,8 +131,8 @@ export function UserForm({ onClose, onCreated }) {
         <label className="field"><span>Display name</span><input autoFocus maxLength="100" name="displayName" onChange={change} required value={form.displayName} /></label>
         <label className="field"><span>Username</span><input maxLength="60" minLength="3" name="username" onChange={change} pattern="[A-Za-z0-9._-]+" required value={form.username} /></label>
         <label className="field"><span>Role</span><select name="role" onChange={change} value={form.role}><option value="staff">Staff</option><option value="admin">Administrator</option></select></label>
-        <label className="field"><span>Password</span><input minLength="10" name="password" onChange={change} required type="password" value={form.password} /></label>
-        <label className="field"><span>Confirm password</span><input minLength="10" name="confirmPassword" onChange={change} required type="password" value={form.confirmPassword} /></label>
+        <label className="field"><span>Password</span><input minLength="6" name="password" onChange={change} required type="password" value={form.password} /></label>
+        <label className="field"><span>Confirm password</span><input minLength="6" name="confirmPassword" onChange={change} required type="password" value={form.confirmPassword} /></label>
       </div>
       {form.role === 'staff'
         ? <ModuleChecklist onToggle={setModules} selected={form.allowedModules} />
@@ -171,5 +171,5 @@ export function ResetPasswordForm({ onClose, onReset, user }) {
   const [error, setError] = useState('');
   const change = (event) => setPasswords((current) => ({ ...current, [event.target.name]: event.target.value }));
   async function submit(event) { event.preventDefault(); setError(''); if (passwords.password !== passwords.confirmPassword) { setError('Passwords do not match.'); return; } setSaving(true); try { await authApi.resetPassword(user.id, passwords.password); onReset(); } catch (submissionError) { setError(submissionError.message); setSaving(false); } }
-  return <FormShell description={`Set a new password for ${user.displayName}. Their existing sessions will be signed out.`} error={error} onClose={onClose} onSubmit={submit} saving={saving} submitLabel="Reset password" title="Reset user password"><div className="form-grid"><label className="field"><span>New password</span><input autoFocus minLength="10" name="password" onChange={change} required type="password" value={passwords.password} /></label><label className="field"><span>Confirm password</span><input minLength="10" name="confirmPassword" onChange={change} required type="password" value={passwords.confirmPassword} /></label></div></FormShell>;
+  return <FormShell description={`Set a new password for ${user.displayName}. Their existing sessions will be signed out.`} error={error} onClose={onClose} onSubmit={submit} saving={saving} submitLabel="Reset password" title="Reset user password"><div className="form-grid"><label className="field"><span>New password</span><input autoFocus minLength="6" name="password" onChange={change} required type="password" value={passwords.password} /></label><label className="field"><span>Confirm password</span><input minLength="6" name="confirmPassword" onChange={change} required type="password" value={passwords.confirmPassword} /></label></div></FormShell>;
 }
