@@ -74,19 +74,28 @@ function sessionToken(request) {
   return parseCookies(request.headers.cookie)[SESSION_COOKIE] || '';
 }
 
+// The session cookie's Secure flag requires HTTPS. By default it is enabled in
+// production, but it can be forced off (e.g. serving over plain HTTP behind a
+// trusted network) with COOKIE_SECURE=false. Set COOKIE_SECURE=true to force it
+// on regardless of NODE_ENV.
+function cookieSecureFlag() {
+  const override = process.env.COOKIE_SECURE;
+  if (override === 'true') return '; Secure';
+  if (override === 'false') return '';
+  return process.env.NODE_ENV === 'production' ? '; Secure' : '';
+}
+
 function setSessionCookie(response, session) {
-  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
   response.setHeader(
     'Set-Cookie',
-    `${SESSION_COOKIE}=${encodeURIComponent(session.token)}; Path=/; HttpOnly; SameSite=Lax; Expires=${new Date(session.expiresAt).toUTCString()}${secure}`,
+    `${SESSION_COOKIE}=${encodeURIComponent(session.token)}; Path=/; HttpOnly; SameSite=Lax; Expires=${new Date(session.expiresAt).toUTCString()}${cookieSecureFlag()}`,
   );
 }
 
 function clearSessionCookie(response) {
-  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
   response.setHeader(
     'Set-Cookie',
-    `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`,
+    `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${cookieSecureFlag()}`,
   );
 }
 
