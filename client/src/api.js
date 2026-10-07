@@ -1,5 +1,18 @@
+// When the client is served separately from the API (e.g. the client is on
+// Cloudflare Pages and the server is hosted elsewhere), set VITE_API_BASE_URL
+// to the API origin, e.g. https://api.example.com. Left empty, requests go to
+// the same origin, which is how local dev (Vite proxy) and the combined
+// Express production server work.
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+
+function apiUrl(path) {
+  return `${API_BASE_URL}${path}`;
+}
+
 async function request(path, options = {}) {
-  const response = await fetch(path, {
+  const response = await fetch(apiUrl(path), {
+    // Include cookies on cross-origin requests so the session cookie is sent.
+    credentials: API_BASE_URL ? 'include' : 'same-origin',
     headers: {
       'Content-Type': 'application/json',
       ...options.headers,

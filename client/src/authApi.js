@@ -1,6 +1,9 @@
+// See api.js: VITE_API_BASE_URL points the client at a separately hosted API.
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+
 async function authRequest(path, options = {}) {
-  const response = await fetch(path, {
-    credentials: 'same-origin',
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    credentials: API_BASE_URL ? 'include' : 'same-origin',
     headers: {
       'Content-Type': 'application/json',
       ...options.headers,
