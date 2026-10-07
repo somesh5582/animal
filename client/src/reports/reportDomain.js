@@ -2,12 +2,14 @@ export const REPORT_TYPES = {
   purchase: 'purchase',
   sales: 'sales',
   weight: 'weight',
+  shedConstruction: 'shedConstruction',
 };
 
 export const REPORT_LABELS = {
   purchase: 'Purchase Report',
   sales: 'Sales Report',
   weight: 'Animal Weight Report',
+  shedConstruction: 'Shed Construction Report',
 };
 
 export function emptyFilters(type) {
@@ -17,6 +19,9 @@ export function emptyFilters(type) {
   }
   if (type === REPORT_TYPES.sales) {
     return { ...dateRange, customer: '', species: '', breed: '' };
+  }
+  if (type === REPORT_TYPES.shedConstruction) {
+    return { ...dateRange, category: '', shedName: '', paidTo: '' };
   }
   return { ...dateRange, animalTag: '', measurementType: '' };
 }
@@ -144,6 +149,40 @@ export function deriveSalesReport(sourceRows, filters) {
   return { rows, summary };
 }
 
+export function deriveShedConstructionReport(sourceRows, filters) {
+  const rows = sourceRows
+    .filter((row) => matchesDate(row.constructionDate, filters)
+      && (!filters.category || equalsText(row.category, filters.category))
+      && includesText(row.shedName, filters.shedName)
+      && includesText(row.paidTo, filters.paidTo))
+    .slice()
+    .sort(descendingBy('constructionDate'));
+
+  const byCategory = new Map();
+  const summary = rows.reduce((totals, row) => {
+    const amount = finite(row.amount, 'construction amount');
+    byCategory.set(row.category, (byCategory.get(row.category) || 0) + amount);
+    return {
+      recordCount: totals.recordCount + 1,
+      totalAmount: totals.totalAmount + amount,
+    };
+  }, { recordCount: 0, totalAmount: 0 });
+
+  const categoryTotals = [...byCategory.entries()]
+    .map(([category, amount]) => ({ category, amount }))
+    .sort((a, b) => b.amount - a.amount);
+
+  return {
+    rows,
+    summary: {
+      ...summary,
+      categoryCount: categoryTotals.length,
+      topCategory: categoryTotals[0] || null,
+      categoryTotals,
+    },
+  };
+}
+
 export function deriveWeightReport(sourceRows, filters) {
   const rows = sourceRows
     .filter((row) => equalsText(row.animalTag, filters.animalTag)
@@ -187,6 +226,8 @@ export function buildReport(type, sourceRows, inputFilters, generatedAt = new Da
     derived = derivePurchaseReport(sourceRows, validation.filters);
   } else if (type === REPORT_TYPES.sales) {
     derived = deriveSalesReport(sourceRows, validation.filters);
+  } else if (type === REPORT_TYPES.shedConstruction) {
+    derived = deriveShedConstructionReport(sourceRows, validation.filters);
   } else if (type === REPORT_TYPES.weight) {
     derived = deriveWeightReport(sourceRows, validation.filters);
   } else {

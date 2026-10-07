@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { Icon } from '../Icons.jsx';
+import { SHED_CONSTRUCTION_CATEGORIES } from '../ShedConstructionModule.jsx';
 import {
   REPORT_LABELS,
   REPORT_TYPES,
@@ -26,6 +27,7 @@ const reportOptions = [
   { type: REPORT_TYPES.purchase, label: 'Purchases', icon: 'purchases' },
   { type: REPORT_TYPES.sales, label: 'Sales', icon: 'sales' },
   { type: REPORT_TYPES.weight, label: 'Animal weights', icon: 'weight' },
+  { type: REPORT_TYPES.shedConstruction, label: 'Shed construction', icon: 'room' },
 ];
 
 const filterLabels = {
@@ -37,6 +39,9 @@ const filterLabels = {
   breed: 'Breed',
   animalTag: 'Animal ID / tag',
   measurementType: 'Frequency',
+  category: 'Category',
+  shedName: 'Shed',
+  paidTo: 'Paid to',
 };
 
 function formatMoney(value) {
@@ -71,6 +76,7 @@ async function retrieveRows(type) {
   if (type === REPORT_TYPES.purchase) return api.getPurchases();
   if (type === REPORT_TYPES.sales) return api.getSales();
   if (type === REPORT_TYPES.weight) return api.getWeights();
+  if (type === REPORT_TYPES.shedConstruction) return api.getShedConstructions();
   throw new Error('Unknown report type.');
 }
 
@@ -156,6 +162,24 @@ function ReportFilters({ type, filters, onChange, onApply, onClear, busy }) {
             </select>
           </FilterField>
         )}
+        {type === REPORT_TYPES.shedConstruction && (
+          <>
+            <FilterField label="Category">
+              <select name="category" onChange={change} value={filters.category}>
+                <option value="">All categories</option>
+                {SHED_CONSTRUCTION_CATEGORIES.map((category) => (
+                  <option key={category} value={category}>{category}</option>
+                ))}
+              </select>
+            </FilterField>
+            <FilterField label="Shed">
+              <input name="shedName" onChange={change} placeholder="Any shed" value={filters.shedName} />
+            </FilterField>
+            <FilterField label="Paid to">
+              <input name="paidTo" onChange={change} placeholder="Any payee" value={filters.paidTo} />
+            </FilterField>
+          </>
+        )}
       </div>
       <div className="report-filter-actions">
         <button className="button button--ghost" disabled={busy} onClick={onClear} type="button">Clear filters</button>
@@ -223,6 +247,22 @@ function ReportSummary({ report }) {
     );
   }
 
+  if (report.type === REPORT_TYPES.shedConstruction) {
+    return (
+      <section className="report-summary-grid report-summary-grid--four" aria-label="Shed construction report summary">
+        <SummaryCard icon="reports" label="Construction records" value={formatNumber(report.summary.recordCount)} />
+        <SummaryCard icon="wallet" label="Total spent" tone="sand" value={formatMoney(report.summary.totalAmount)} />
+        <SummaryCard icon="room" label="Categories" value={formatNumber(report.summary.categoryCount)} />
+        <SummaryCard
+          icon="trending"
+          label="Top category"
+          note={report.summary.topCategory ? formatMoney(report.summary.topCategory.amount) : undefined}
+          value={report.summary.topCategory ? report.summary.topCategory.category : '—'}
+        />
+      </section>
+    );
+  }
+
   return (
     <section className="report-summary-grid report-summary-grid--four" aria-label="Animal weight report summary">
       <SummaryCard icon="reports" label="Measurements" value={formatNumber(report.summary.recordCount)} />
@@ -284,6 +324,20 @@ function SalesRows({ rows }) {
   ));
 }
 
+function ShedConstructionRows({ rows }) {
+  return rows.map((row) => (
+    <tr key={row.id}>
+      <td><strong>#{String(row.id).padStart(3, '0')}</strong></td>
+      <td>{formatDate(row.constructionDate)}</td>
+      <td>{row.shedName || '—'}</td>
+      <td><span className="measurement-type">{row.category}</span></td>
+      <td>{row.paidTo}</td>
+      <td><strong>{formatMoney(row.amount)}</strong></td>
+      <td><span className="table-notes">{row.remarks || '—'}</span></td>
+    </tr>
+  ));
+}
+
 function WeightRows({ rows }) {
   return rows.map((row) => (
     <tr key={row.id}>
@@ -304,7 +358,9 @@ function ReportTable({ report }) {
     ? ['Batch', 'Purchase date', 'Supplier', 'Species', 'Breed', 'Quantity', 'Unit cost', 'Transport', 'Total cost']
     : report.type === REPORT_TYPES.sales
       ? ['Sale', 'Sale date', 'Customer', 'Source batch', 'Species', 'Breed', 'Quantity', 'Unit price', 'Revenue', 'Cost', 'Profit']
-      : ['Animal ID / tag', 'Measurement date', 'Frequency', 'Weight', 'Source batch', 'Species', 'Breed', 'Notes'];
+      : report.type === REPORT_TYPES.shedConstruction
+        ? ['Record', 'Date', 'Shed', 'Category', 'Paid to', 'Amount', 'Remarks']
+        : ['Animal ID / tag', 'Measurement date', 'Frequency', 'Weight', 'Source batch', 'Species', 'Breed', 'Notes'];
 
   return (
     <section className="panel report-table-panel">
@@ -318,6 +374,7 @@ function ReportTable({ report }) {
           <tbody>
             {report.type === REPORT_TYPES.purchase && <PurchaseRows rows={report.rows} />}
             {report.type === REPORT_TYPES.sales && <SalesRows rows={report.rows} />}
+            {report.type === REPORT_TYPES.shedConstruction && <ShedConstructionRows rows={report.rows} />}
             {report.type === REPORT_TYPES.weight && <WeightRows rows={report.rows} />}
           </tbody>
         </table>
@@ -351,6 +408,7 @@ export default function ReportsPage() {
     purchase: emptyFilters(REPORT_TYPES.purchase),
     sales: emptyFilters(REPORT_TYPES.sales),
     weight: emptyFilters(REPORT_TYPES.weight),
+    shedConstruction: emptyFilters(REPORT_TYPES.shedConstruction),
   }));
   const [reportsByType, setReportsByType] = useState({});
   const [status, setStatus] = useState('idle');
