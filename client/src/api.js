@@ -45,6 +45,10 @@ export const api = {
     method: 'POST',
     body: JSON.stringify(purchase),
   }),
+  updatePurchase: (id, purchase) => request(`/api/purchases/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(purchase),
+  }),
   deletePurchase: (id) => request(`/api/purchases/${id}`, {
     method: 'DELETE',
   }),

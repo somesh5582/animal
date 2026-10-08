@@ -476,6 +476,50 @@ export async function createPurchase(purchase) {
   return getPurchase(result.insertId);
 }
 
+export async function updatePurchase(id, purchase) {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const current = await getPurchase(id, connection);
+    if (!current) {
+      const error = new Error('Purchase not found.');
+      error.status = 404;
+      throw error;
+    }
+
+    // Quantity cannot drop below what has already been sold from this batch.
+    const soldQuantity = Number(current.soldQuantity) || 0;
+    if (purchase.quantity < soldQuantity) {
+      const error = new Error(
+        `Quantity cannot be below ${soldQuantity}, the number already sold from this batch.`,
+      );
+      error.status = 409;
+      throw error;
+    }
+
+    await connection.query(
+      `UPDATE purchases
+       SET purchase_date = ?, supplier = ?, species = ?, breed = ?,
+           quantity = ?, unit_cost = ?, transport_cost = ?, notes = ?
+       WHERE id = ?`,
+      [
+        purchase.purchaseDate, purchase.supplier, purchase.species, purchase.breed,
+        purchase.quantity, purchase.unitCost, purchase.transportCost, purchase.notes, id,
+      ],
+    );
+
+    const updated = await getPurchase(id, connection);
+    await connection.commit();
+    return updated;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
 export async function deletePurchase(id) {
   const linkedRecords = await get(
     `SELECT

@@ -48,6 +48,7 @@ import {
   listTreatments,
   listWeights,
   moveRoomAssignment,
+  updatePurchase,
   updateRoom,
   updateWeight,
 } from './db.js';
@@ -562,6 +563,14 @@ app.get('/api/purchases', requireModuleAccess('purchases'), async (_request, res
 app.post('/api/purchases', requireAdmin, async (request, response) => {
   const purchase = await createPurchase(parsePurchase(request.body));
   response.status(201).json(purchase);
+});
+
+app.patch('/api/purchases/:id', requireAdmin, async (request, response) => {
+  const purchase = await updatePurchase(
+    parseId(request.params.id),
+    parsePurchase(request.body),
+  );
+  response.json(purchase);
 });
 
 app.delete('/api/purchases/:id', requireAdmin, async (request, response) => {

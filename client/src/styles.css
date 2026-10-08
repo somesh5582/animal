@@ -1077,3 +1077,7 @@ td strong { color: var(--ink); }
   margin-top: 1rem;
   opacity: 0.75;
 }
+
+/* Purchase row actions (edit + delete) */
+.row-actions { align-items: center; display: flex; gap: 6px; justify-content: flex-end; }
+.row-actions .button { min-height: 34px; padding: 6px 10px; }

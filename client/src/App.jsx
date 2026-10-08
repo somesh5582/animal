@@ -347,7 +347,7 @@ function Dashboard({ canManage, dashboard, purchases, sales, inventory, onAddPur
   );
 }
 
-function PurchasesPage({ canManage, purchases, onAdd, onDelete }) {
+function PurchasesPage({ canManage, purchases, onAdd, onDelete, onEdit }) {
   if (purchases.length === 0) {
     return (
       <section className="panel page-panel">
@@ -392,16 +392,26 @@ function PurchasesPage({ canManage, purchases, onAdd, onDelete }) {
                 <td><span className={`stock-pill ${purchase.availableQuantity === 0 ? 'stock-pill--empty' : ''}`}>{formatNumber(purchase.availableQuantity)} left</span></td>
                 <td><strong>{formatMoney(purchase.totalCost)}</strong><small className="cell-note">{formatMoney(purchase.landedUnitCost)} each landed</small></td>
                 {canManage && <td>
-                  <button
-                    aria-label={`Delete purchase batch ${purchase.id}`}
-                    className="icon-button"
-                    disabled={purchase.soldQuantity > 0}
-                    onClick={() => onDelete(purchase)}
-                    title={purchase.soldQuantity > 0 ? 'Delete linked sales first' : 'Delete purchase'}
-                    type="button"
-                  >
-                    <Icon name="trash" size={17} />
-                  </button>
+                  <div className="row-actions">
+                    <button
+                      className="button button--soft"
+                      onClick={() => onEdit(purchase)}
+                      title="Edit purchase"
+                      type="button"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      aria-label={`Delete purchase batch ${purchase.id}`}
+                      className="icon-button"
+                      disabled={purchase.soldQuantity > 0}
+                      onClick={() => onDelete(purchase)}
+                      title={purchase.soldQuantity > 0 ? 'Delete linked sales first' : 'Delete purchase'}
+                      type="button"
+                    >
+                      <Icon name="trash" size={17} />
+                    </button>
+                  </div>
                 </td>}
               </tr>
             ))}
@@ -555,16 +565,17 @@ function FormError({ message }) {
   return <div className="form-error"><Icon name="alert" size={17} />{message}</div>;
 }
 
-function PurchaseForm({ onClose, onSubmit }) {
+function PurchaseForm({ initial, onClose, onSubmit }) {
+  const isEditing = Boolean(initial);
   const [form, setForm] = useState({
-    purchaseDate: today(),
-    supplier: '',
-    species: '',
-    breed: '',
-    quantity: '',
-    unitCost: '',
-    transportCost: '0',
-    notes: '',
+    purchaseDate: initial?.purchaseDate ?? today(),
+    supplier: initial?.supplier ?? '',
+    species: initial?.species ?? '',
+    breed: initial?.breed ?? '',
+    quantity: initial ? String(initial.quantity) : '',
+    unitCost: initial ? String(initial.unitCost) : '',
+    transportCost: initial ? String(initial.transportCost) : '0',
+    notes: initial?.notes ?? '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -591,7 +602,7 @@ function PurchaseForm({ onClose, onSubmit }) {
   return (
     <form onSubmit={submit}>
       <div className="modal__header">
-        <div><span className="eyebrow">Incoming stock</span><h2>Record purchase</h2><p>Create a livestock batch and add it to inventory.</p></div>
+        <div><span className="eyebrow">Incoming stock</span><h2>{isEditing ? 'Edit purchase' : 'Record purchase'}</h2><p>{isEditing ? 'Update the details of this livestock batch.' : 'Create a livestock batch and add it to inventory.'}</p></div>
         <button aria-label="Close" className="icon-button" onClick={onClose} type="button"><Icon name="close" /></button>
       </div>
       <div className="modal__body">
@@ -610,7 +621,7 @@ function PurchaseForm({ onClose, onSubmit }) {
       </div>
       <div className="modal__footer">
         <button className="button button--ghost" onClick={onClose} type="button">Cancel</button>
-        <button className="button button--primary" disabled={saving} type="submit">{saving ? 'Saving…' : 'Save purchase'}<Icon name="check" size={17} /></button>
+        <button className="button button--primary" disabled={saving} type="submit">{saving ? 'Saving…' : (isEditing ? 'Save changes' : 'Save purchase')}<Icon name="check" size={17} /></button>
       </div>
     </form>
   );
@@ -772,6 +783,7 @@ export default function App({ currentUser, onLogout }) {
   const [feedInitial, setFeedInitial] = useState({});
   const [roomInitial, setRoomInitial] = useState({});
   const [roomAssignmentInitial, setRoomAssignmentInitial] = useState({});
+  const [purchaseInitial, setPurchaseInitial] = useState(null);
   const [userModal, setUserModal] = useState(null);
   const [userRefreshKey, setUserRefreshKey] = useState(0);
 
@@ -827,10 +839,20 @@ export default function App({ currentUser, onLogout }) {
     return () => window.clearTimeout(timeout);
   }, [notice]);
 
-  async function addPurchase(purchase) {
-    await api.createPurchase(purchase);
+  function openPurchase(purchase = null) {
+    setPurchaseInitial(purchase);
+    setModal('purchase');
+  }
+
+  async function savePurchase(purchase) {
+    if (purchaseInitial) {
+      await api.updatePurchase(purchaseInitial.id, purchase);
+    } else {
+      await api.createPurchase(purchase);
+    }
     setModal(null);
-    setNotice('Purchase saved and inventory updated.');
+    setPurchaseInitial(null);
+    setNotice(purchaseInitial ? 'Purchase updated.' : 'Purchase saved and inventory updated.');
     await loadData();
   }
 
@@ -1029,7 +1051,7 @@ export default function App({ currentUser, onLogout }) {
   const pageAction = !canManage
     ? null
     : activePage === 'purchases'
-      ? { label: 'New purchase', action: () => setModal('purchase') }
+      ? { label: 'New purchase', action: () => openPurchase() }
       : activePage === 'sales'
       ? { label: 'Record sale', action: () => setModal('sale'), disabled: inventory.length === 0 }
       : activePage === 'expenditures'
@@ -1079,13 +1101,13 @@ export default function App({ currentUser, onLogout }) {
             <div className="loading-state"><span className="loader" /><strong>Opening your ledger…</strong></div>
           ) : (
             <>
-              {activePage === 'dashboard' && <Dashboard canManage={canManage} dashboard={dashboard} inventory={inventory} onAddPurchase={() => setModal('purchase')} onAddSale={() => setModal('sale')} purchases={purchases} sales={sales} />}
+              {activePage === 'dashboard' && <Dashboard canManage={canManage} dashboard={dashboard} inventory={inventory} onAddPurchase={() => openPurchase()} onAddSale={() => setModal('sale')} purchases={purchases} sales={sales} />}
               {activePage === 'analytics' && canAccess('analytics') && <AnalyticsDashboard assignments={roomAssignments} dashboard={dashboard} inventory={inventory} purchases={purchases} rooms={rooms} sales={sales} weights={weights} />}
-              {activePage === 'purchases' && canAccess('purchases') && <PurchasesPage canManage={canManage} onAdd={() => setModal('purchase')} onDelete={removePurchase} purchases={purchases} />}
+              {activePage === 'purchases' && canAccess('purchases') && <PurchasesPage canManage={canManage} onAdd={() => openPurchase()} onDelete={removePurchase} onEdit={openPurchase} purchases={purchases} />}
               {activePage === 'sales' && canAccess('sales') && <SalesPage canManage={canManage} onAdd={inventory.length > 0 ? () => setModal('sale') : null} onDelete={removeSale} onViewInvoice={setInvoiceSale} sales={sales} />}
               {activePage === 'expenditures' && canAccess('expenditures') && <ExpenditurePage canManage={canManage} expenditures={expenditures} onAdd={() => setModal('expenditure')} onDelete={removeExpenditure} />}
               {activePage === 'shed-constructions' && canAccess('shed-constructions') && <ShedConstructionPage canManage={canManage} entries={shedConstructions} onAdd={() => setModal('shed-construction')} onDelete={removeShedConstruction} />}
-              {activePage === 'inventory' && canAccess('inventory') && <InventoryPage canManage={canManage} inventory={inventory} onAddPurchase={() => setModal('purchase')} onAddSale={(batchId) => setModal(`sale:${batchId}`)} />}
+              {activePage === 'inventory' && canAccess('inventory') && <InventoryPage canManage={canManage} inventory={inventory} onAddPurchase={() => openPurchase()} onAddSale={(batchId) => setModal(`sale:${batchId}`)} />}
               {activePage === 'rooms' && canAccess('rooms') && <RoomsPage assignments={roomAssignments} canManage={canManage} inventory={inventory} onAddRoom={() => openRoom()} onAssign={openRoomAssignment} onDeleteRoom={removeRoom} onEditRoom={openRoom} onMove={openRoomAssignment} onUnassign={unassignRoom} rooms={rooms} weights={weights} />}
               {activePage === 'feeds' && canAccess('feeds') && <FeedPage canManage={canManage} feeds={feeds} inventory={inventory} onAdd={openFeed} onDelete={removeFeed} />}
               {activePage === 'weights' && canAccess('weights') && <WeightPage canManage={canManage} inventory={inventory} onAdd={() => openWeight()} onDelete={removeWeight} onEdit={openWeight} weights={weights} />}
@@ -1103,7 +1125,7 @@ export default function App({ currentUser, onLogout }) {
         <div className="modal-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setModal(null); }} role="presentation">
           <section aria-modal="true" className="modal" role="dialog">
             {modal === 'purchase'
-              ? <PurchaseForm onClose={() => setModal(null)} onSubmit={addPurchase} />
+              ? <PurchaseForm initial={purchaseInitial} onClose={() => { setModal(null); setPurchaseInitial(null); }} onSubmit={savePurchase} />
               : modal.startsWith('sale')
                 ? <SaleForm initialPurchaseId={Number(modal.split(':')[1]) || null} inventory={inventory} onClose={() => setModal(null)} onSubmit={addSale} />
                 : modal === 'weight'
