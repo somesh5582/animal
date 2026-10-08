@@ -25,6 +25,7 @@ import {
   createRoomAssignment,
   createSale,
   createShedConstruction,
+  createTag,
   createTreatment,
   createWeight,
   deleteExpenditure,
@@ -34,6 +35,7 @@ import {
   deleteRoomAssignment,
   deleteSale,
   deleteShedConstruction,
+  deleteTag,
   deleteTreatment,
   deleteWeight,
   getDashboard,
@@ -45,11 +47,13 @@ import {
   listRooms,
   listSales,
   listShedConstructions,
+  listTags,
   listTreatments,
   listWeights,
   moveRoomAssignment,
   updatePurchase,
   updateRoom,
+  updateTag,
   updateWeight,
 } from './db.js';
 
@@ -132,6 +136,18 @@ function requireModuleAccess(moduleId) {
     if (user?.role === 'admin') return next();
     const modules = user?.allowedModules;
     if (modules == null || modules.includes(moduleId)) return next();
+    response.status(403).json({ message: 'You do not have access to this module.' });
+  };
+}
+
+// Pass if the user can access ANY of the given modules (used for shared data
+// like tags, which both the Tags page and the Weights form need to read).
+function requireAnyModuleAccess(...moduleIds) {
+  return (request, response, next) => {
+    const user = request.user;
+    if (user?.role === 'admin') return next();
+    const modules = user?.allowedModules;
+    if (modules == null || moduleIds.some((id) => modules.includes(id))) return next();
     response.status(403).json({ message: 'You do not have access to this module.' });
   };
 }
@@ -369,6 +385,14 @@ function parseShedConstruction(body = {}) {
   };
 }
 
+function parseTag(body = {}) {
+  return {
+    code: requiredText(body.code, 'Tag code', 60),
+    label: optionalText(body.label, 'Label', 100),
+    notes: optionalText(body.notes, 'Notes', 500),
+  };
+}
+
 function username(value) {
   const result = requiredText(value, 'Username', 60);
   if (!/^[A-Za-z0-9._-]{3,60}$/.test(result)) {
@@ -406,6 +430,7 @@ const ACCESS_MODULES = [
   'weights',
   'treatments',
   'reports',
+  'tags',
 ];
 
 // Parse the raw allowed_modules JSON string from a DB row. NULL -> null (full access).
@@ -762,6 +787,29 @@ app.delete('/api/shed-constructions/:id', requireAdmin, async (request, response
   const deleted = await deleteShedConstruction(parseId(request.params.id));
   if (!deleted) {
     throw httpError(404, 'Shed construction expenditure not found.');
+  }
+  response.status(204).end();
+});
+
+// Tags are read by both the Tags module and the Weights form, so allow either.
+app.get('/api/tags', requireAnyModuleAccess('tags', 'weights'), async (_request, response) => {
+  response.json(await listTags());
+});
+
+app.post('/api/tags', requireAdmin, async (request, response) => {
+  const tag = await createTag(parseTag(request.body));
+  response.status(201).json(tag);
+});
+
+app.patch('/api/tags/:id', requireAdmin, async (request, response) => {
+  const tag = await updateTag(parseId(request.params.id), parseTag(request.body));
+  response.json(tag);
+});
+
+app.delete('/api/tags/:id', requireAdmin, async (request, response) => {
+  const deleted = await deleteTag(parseId(request.params.id));
+  if (!deleted) {
+    throw httpError(404, 'Tag not found.');
   }
   response.status(204).end();
 });

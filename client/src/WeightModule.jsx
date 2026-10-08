@@ -246,7 +246,7 @@ function Field({ hint, label, children }) {
   );
 }
 
-export function WeightForm({ initial = {}, inventory, onClose, onSubmit, purchases, weights }) {
+export function WeightForm({ initial = {}, inventory, onClose, onSubmit, purchases, tags = [], weights }) {
   const isEdit = Boolean(initial.id);
   const batchOptions = useMemo(() => {
     if (!isEdit || inventory.some((batch) => batch.id === initial.purchaseId)) return inventory;
@@ -265,15 +265,20 @@ export function WeightForm({ initial = {}, inventory, onClose, onSubmit, purchas
   const [error, setError] = useState('');
   const selectedBatch = batchOptions.find((batch) => batch.id === Number(form.purchaseId));
   const knownAnimals = useMemo(() => {
-    const tags = new Map();
+    const options = new Map();
+    // Master tags (TAG-01..TAG-60) always offered as suggestions.
+    for (const tag of tags) {
+      if (tag.code) options.set(tag.code.toLowerCase(), tag.code);
+    }
+    // Plus any tags already used on in-stock animals.
     for (const entry of weights) {
       const isInStock = inventory.some((batch) => batch.id === entry.purchaseId);
       if (entry.animalTag && isInStock) {
-        tags.set(entry.animalTag.toLowerCase(), entry.animalTag);
+        options.set(entry.animalTag.toLowerCase(), entry.animalTag);
       }
     }
-    return [...tags.values()].sort((a, b) => a.localeCompare(b));
-  }, [inventory, weights]);
+    return [...options.values()].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  }, [inventory, tags, weights]);
 
   function change(event) {
     const { name, value } = event.target;

@@ -122,4 +122,16 @@ export const api = {
   deleteShedConstruction: (id) => request(`/api/shed-constructions/${id}`, {
     method: 'DELETE',
   }),
+  getTags: () => request('/api/tags'),
+  createTag: (tag) => request('/api/tags', {
+    method: 'POST',
+    body: JSON.stringify(tag),
+  }),
+  updateTag: (id, tag) => request(`/api/tags/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(tag),
+  }),
+  deleteTag: (id) => request(`/api/tags/${id}`, {
+    method: 'DELETE',
+  }),
 };

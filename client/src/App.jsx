@@ -7,6 +7,7 @@ import { Icon } from './Icons.jsx';
 import ReportsPage from './reports/ReportsPage.jsx';
 import { RoomAssignmentForm, RoomForm, RoomsPage } from './RoomModule.jsx';
 import { ShedConstructionForm, ShedConstructionPage } from './ShedConstructionModule.jsx';
+import { TagForm, TagsPage } from './TagsModule.jsx';
 import { TreatmentForm, TreatmentPage } from './TreatmentModule.jsx';
 import { EditAccessForm, ResetPasswordForm, UserForm, UsersPage } from './UserModule.jsx';
 import { WeightForm, WeightPage } from './WeightModule.jsx';
@@ -30,6 +31,7 @@ const navigation = [
   { id: 'shed-constructions', label: 'Shed costs', icon: 'room' },
   { id: 'feeds', label: 'Feed', icon: 'feed' },
   { id: 'weights', label: 'Weights', icon: 'weight' },
+  { id: 'tags', label: 'Tags', icon: 'herd' },
   { id: 'treatments', label: 'Treatments', icon: 'treatment' },
   { id: 'reports', label: 'Reports', icon: 'reports' },
   { id: 'users', label: 'Users', icon: 'users', adminOnly: true },
@@ -46,6 +48,7 @@ const pageCopy = {
   'shed-constructions': ['Shed construction costs', 'Track building expenses by category'],
   feeds: ['Daily feed', 'Track three timed meals and basket quantities'],
   weights: ['Animal weights', 'Record and review livestock weight measurements'],
+  tags: ['Animal ID tags', 'Manage the predefined tags used when recording weights'],
   treatments: ['Animal treatments', 'Record ID-based medical care and follow-ups'],
   reports: ['Reports', 'Filter, review, and print livestock records'],
   users: ['User management', 'Create users and control application access'],
@@ -774,6 +777,7 @@ export default function App({ currentUser, onLogout }) {
   const [roomAssignments, setRoomAssignments] = useState([]);
   const [expenditures, setExpenditures] = useState([]);
   const [shedConstructions, setShedConstructions] = useState([]);
+  const [tags, setTags] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -784,6 +788,7 @@ export default function App({ currentUser, onLogout }) {
   const [roomInitial, setRoomInitial] = useState({});
   const [roomAssignmentInitial, setRoomAssignmentInitial] = useState({});
   const [purchaseInitial, setPurchaseInitial] = useState(null);
+  const [tagInitial, setTagInitial] = useState({});
   const [userModal, setUserModal] = useState(null);
   const [userRefreshKey, setUserRefreshKey] = useState(0);
 
@@ -804,10 +809,13 @@ export default function App({ currentUser, onLogout }) {
       ['rooms', () => api.getRoomAssignments(), setRoomAssignments, []],
       ['expenditures', () => api.getExpenditures(), setExpenditures, []],
       ['shed-constructions', () => api.getShedConstructions(), setShedConstructions, []],
+      // Tags feed the weights form too, so fetch when the user can access either.
+      [['tags', 'weights'], () => api.getTags(), setTags, []],
     ];
     try {
       await Promise.all(tasks.map(async ([moduleId, fetcher, setter, fallback]) => {
-        if (!canAccess(moduleId)) {
+        const moduleIds = Array.isArray(moduleId) ? moduleId : [moduleId];
+        if (!moduleIds.some((id) => canAccess(id))) {
           setter(fallback);
           return;
         }
@@ -947,6 +955,35 @@ export default function App({ currentUser, onLogout }) {
     }
   }
 
+  function openTag(initial = {}) {
+    setTagInitial(initial);
+    setModal('tag');
+  }
+
+  async function saveTag(tag) {
+    if (tagInitial.id) {
+      await api.updateTag(tagInitial.id, tag);
+      setNotice('Tag updated.');
+    } else {
+      await api.createTag(tag);
+      setNotice('Tag added.');
+    }
+    setModal(null);
+    setTagInitial({});
+    await loadData();
+  }
+
+  async function removeTag(tag) {
+    if (!window.confirm(`Delete tag ${tag.code}?`)) return;
+    try {
+      await api.deleteTag(tag.id);
+      setNotice('Tag deleted.');
+      await loadData();
+    } catch (deleteError) {
+      setError(deleteError.message);
+    }
+  }
+
   function openRoom(initial = {}) {
     setRoomInitial(initial);
     setModal('room');
@@ -1064,6 +1101,8 @@ export default function App({ currentUser, onLogout }) {
             ? { label: 'Record feed', action: () => openFeed(), disabled: inventory.length === 0 }
             : activePage === 'weights'
               ? { label: 'Record weight', action: () => openWeight(), disabled: inventory.length === 0 }
+              : activePage === 'tags'
+                ? { label: 'Add tag', action: () => openTag() }
               : activePage === 'treatments'
                 ? { label: 'Record treatment', action: () => setModal('treatment'), disabled: inventory.length === 0 }
                 : null;
@@ -1111,6 +1150,7 @@ export default function App({ currentUser, onLogout }) {
               {activePage === 'rooms' && canAccess('rooms') && <RoomsPage assignments={roomAssignments} canManage={canManage} inventory={inventory} onAddRoom={() => openRoom()} onAssign={openRoomAssignment} onDeleteRoom={removeRoom} onEditRoom={openRoom} onMove={openRoomAssignment} onUnassign={unassignRoom} rooms={rooms} weights={weights} />}
               {activePage === 'feeds' && canAccess('feeds') && <FeedPage canManage={canManage} feeds={feeds} inventory={inventory} onAdd={openFeed} onDelete={removeFeed} />}
               {activePage === 'weights' && canAccess('weights') && <WeightPage canManage={canManage} inventory={inventory} onAdd={() => openWeight()} onDelete={removeWeight} onEdit={openWeight} weights={weights} />}
+              {activePage === 'tags' && canAccess('tags') && <TagsPage canManage={canManage} onAdd={() => openTag()} onDelete={removeTag} onEdit={openTag} tags={tags} />}
               {activePage === 'treatments' && canAccess('treatments') && <TreatmentPage canManage={canManage} inventory={inventory} onAdd={() => setModal('treatment')} onDelete={removeTreatment} treatments={treatments} />}
               {activePage === 'reports' && canAccess('reports') && <ReportsPage />}
               {activePage === 'users' && currentUser.role === 'admin' && <UsersPage currentUser={currentUser} key={userRefreshKey} onAdd={() => setUserModal({ type: 'create' })} onEditAccess={(user, refresh) => setUserModal({ type: 'access', user, refresh })} onReset={(user, refresh) => setUserModal({ type: 'reset', user, refresh })} />}
@@ -1129,7 +1169,7 @@ export default function App({ currentUser, onLogout }) {
               : modal.startsWith('sale')
                 ? <SaleForm initialPurchaseId={Number(modal.split(':')[1]) || null} inventory={inventory} onClose={() => setModal(null)} onSubmit={addSale} />
                 : modal === 'weight'
-                  ? <WeightForm initial={weightInitial} inventory={inventory} onClose={() => setModal(null)} onSubmit={saveWeight} purchases={purchases} weights={weights} />
+                  ? <WeightForm initial={weightInitial} inventory={inventory} onClose={() => setModal(null)} onSubmit={saveWeight} purchases={purchases} tags={tags} weights={weights} />
                   : modal === 'treatment'
                     ? <TreatmentForm inventory={inventory} onClose={() => setModal(null)} onSubmit={addTreatment} treatments={treatments} weights={weights} />
                     : modal === 'feed'
@@ -1142,7 +1182,9 @@ export default function App({ currentUser, onLogout }) {
                             ? <ExpenditureForm onClose={() => setModal(null)} onSubmit={addExpenditure} />
                             : modal === 'shed-construction'
                               ? <ShedConstructionForm onClose={() => setModal(null)} onSubmit={addShedConstruction} />
-                              : null}
+                              : modal === 'tag'
+                                ? <TagForm initial={tagInitial} onClose={() => { setModal(null); setTagInitial({}); }} onSubmit={saveTag} />
+                                : null}
           </section>
         </div>
       )}

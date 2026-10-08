@@ -17,6 +17,7 @@ export const ACCESS_MODULES = [
   { id: 'weights', label: 'Weights' },
   { id: 'treatments', label: 'Treatments' },
   { id: 'reports', label: 'Reports' },
+  { id: 'tags', label: 'Tags' },
 ];
 
 function formatDate(value) {

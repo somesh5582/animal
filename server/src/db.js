@@ -168,6 +168,16 @@ export async function initializeSchema() {
       CHECK (amount > 0)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci`,
 
+    `CREATE TABLE IF NOT EXISTS tags (
+      id INTEGER PRIMARY KEY AUTO_INCREMENT,
+      code VARCHAR(60) NOT NULL,
+      label VARCHAR(100) NOT NULL DEFAULT '',
+      notes VARCHAR(500) NOT NULL DEFAULT '',
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT uq_tags_code UNIQUE (code)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci`,
+
     `CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTO_INCREMENT,
       username VARCHAR(60) NOT NULL,
@@ -225,9 +235,27 @@ export async function initializeSchema() {
       await createIndexIfMissing(connection, table, name, columns);
     }
     await addColumnIfMissing(connection, 'users', 'allowed_modules', 'TEXT NULL');
+    await seedTags(connection);
   } finally {
     connection.release();
   }
+}
+
+// Seed TAG-01..TAG-60 once, only when the tags table is empty. Idempotent:
+// never duplicates or overwrites edits made later.
+async function seedTags(connection) {
+  const [rows] = await connection.query('SELECT COUNT(*) AS n FROM tags');
+  if (rows[0].n > 0) return;
+  const values = [];
+  const params = [];
+  for (let i = 1; i <= 60; i += 1) {
+    values.push('(?)');
+    params.push(`TAG-${String(i).padStart(2, '0')}`);
+  }
+  await connection.query(
+    `INSERT INTO tags (code) VALUES ${values.join(', ')}`,
+    params,
+  );
 }
 
 async function addColumnIfMissing(connection, table, column, definition) {
@@ -1169,5 +1197,72 @@ export async function createShedConstruction(entry) {
 
 export async function deleteShedConstruction(id) {
   const result = await run('DELETE FROM shed_construction_expenditures WHERE id = ?', [id]);
+  return result.affectedRows > 0;
+}
+
+const tagSelect = `
+  SELECT
+    id,
+    code,
+    label,
+    notes,
+    created_at AS createdAt,
+    updated_at AS updatedAt
+  FROM tags
+`;
+
+export async function listTags() {
+  return all(`
+    ${tagSelect}
+    ORDER BY code ASC
+  `);
+}
+
+export async function getTag(id, executor = pool) {
+  const [rows] = await executor.query(`${tagSelect} WHERE id = ?`, [id]);
+  return rows[0];
+}
+
+export async function createTag(tag) {
+  let result;
+  try {
+    result = await run(
+      `INSERT INTO tags (code, label, notes) VALUES (?, ?, ?)`,
+      [tag.code, tag.label, tag.notes],
+    );
+  } catch (error) {
+    if (isDuplicateError(error)) {
+      error.message = 'A tag with this code already exists.';
+      error.status = 409;
+    }
+    throw error;
+  }
+  return getTag(result.insertId);
+}
+
+export async function updateTag(id, tag) {
+  const current = await getTag(id);
+  if (!current) {
+    const error = new Error('Tag not found.');
+    error.status = 404;
+    throw error;
+  }
+  try {
+    await run(
+      `UPDATE tags SET code = ?, label = ?, notes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      [tag.code, tag.label, tag.notes, id],
+    );
+  } catch (error) {
+    if (isDuplicateError(error)) {
+      error.message = 'A tag with this code already exists.';
+      error.status = 409;
+    }
+    throw error;
+  }
+  return getTag(id);
+}
+
+export async function deleteTag(id) {
+  const result = await run('DELETE FROM tags WHERE id = ?', [id]);
   return result.affectedRows > 0;
 }
