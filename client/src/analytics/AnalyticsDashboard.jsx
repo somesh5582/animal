@@ -306,7 +306,80 @@ function AnimalPerformance({ animalPerformance }) {
   );
 }
 
-export default function AnalyticsDashboard({ assignments, dashboard, inventory, purchases, rooms, sales, weights }) {
+function TreatmentAnalytics({ treatments }) {
+  const { summary } = treatments;
+  return (
+    <section className="analytics-section">
+      <SectionHeading
+        badge={`${summary.treatmentCount} treatments`}
+        description="Medical care recorded against animal IDs, including medicines used, cost, and upcoming follow-ups."
+        eyebrow="Health analytics"
+        title="Treatment overview"
+      />
+      <div className="analytics-metric-grid">
+        <MetricCard icon="treatment" label="Treatments recorded" note={`${integer(summary.treatedAnimalCount)} animals treated`} value={integer(summary.treatmentCount)} />
+        <MetricCard icon="wallet" label="Treatment cost" note={summary.averageCost == null ? 'No cost recorded' : `${money(summary.averageCost)} average per treatment`} tone="sand" value={money(summary.totalCost)} />
+        <MetricCard icon="expenditure" label="Medicines used" note="Distinct medicines recorded" tone="blue" value={integer(summary.medicineCount)} />
+        <MetricCard icon="calendar" label="Upcoming follow-ups" note="Follow-up dates today or later" tone={summary.upcomingFollowUps > 0 ? 'orange' : ''} value={integer(summary.upcomingFollowUps)} />
+      </div>
+
+      {treatments.summary.treatmentCount === 0 ? (
+        <article className="panel analytics-empty analytics-empty--large"><Icon name="treatment" size={29} /><strong>No treatments recorded</strong><span>Record animal treatments to see health analytics here.</span></article>
+      ) : (
+        <div className="analytics-two-column">
+          <article className="panel analytics-panel">
+            <SectionHeading
+              badge={`${treatments.medicines.length} entries`}
+              description="How often each medicine has been used and its total cost."
+              eyebrow="Medicine usage"
+              title="Treatments by medicine"
+            />
+            <div className="analytics-species-list">
+              {treatments.medicines.map((medicine) => {
+                const share = summary.treatmentCount > 0 ? (medicine.count / summary.treatmentCount) * 100 : 0;
+                return (
+                  <div className="analytics-species-row" key={medicine.name.toLocaleLowerCase()}>
+                    <div><strong>{medicine.name}</strong><span>{integer(medicine.count)} treatment{medicine.count === 1 ? '' : 's'}</span></div>
+                    <div><strong>{money(medicine.cost)}</strong><span>{number(share)}% of treatments</span></div>
+                    <div className="progress-track"><span style={{ width: `${share}%` }} /></div>
+                  </div>
+                );
+              })}
+            </div>
+          </article>
+
+          <article className="panel analytics-panel analytics-animal-table">
+            <SectionHeading
+              description="The ten most recent treatment records."
+              eyebrow="Latest activity"
+              title="Recent treatments"
+            />
+            <div className="table-wrap">
+              <table>
+                <thead><tr><th>Date</th><th>Animal ID</th><th>Treatment</th><th>Medicine</th><th>Vet</th><th>Cost</th><th>Follow-up</th></tr></thead>
+                <tbody>
+                  {treatments.recent.map((treatment) => (
+                    <tr key={treatment.id}>
+                      <td>{formatDate(treatment.treatmentDate)}</td>
+                      <td><strong className="animal-tag">{treatment.animalTag}</strong></td>
+                      <td>{treatment.treatmentDescription}</td>
+                      <td>{treatment.medicine || '—'}</td>
+                      <td>{treatment.veterinarian || '—'}</td>
+                      <td>{money(treatment.treatmentCost)}</td>
+                      <td>{treatment.followUpDate ? formatDate(treatment.followUpDate) : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+      )}
+    </section>
+  );
+}
+
+export default function AnalyticsDashboard({ assignments, dashboard, inventory, purchases, rooms, sales, treatments, weights }) {
   const asOf = useMemo(() => new Date(), []);
   const analytics = useMemo(() => buildAnalytics({
     assignments,
@@ -315,10 +388,11 @@ export default function AnalyticsDashboard({ assignments, dashboard, inventory, 
     purchases,
     rooms,
     sales,
+    treatments,
     weights,
-  }, asOf), [asOf, assignments, dashboard, inventory, purchases, rooms, sales, weights]);
+  }, asOf), [asOf, assignments, dashboard, inventory, purchases, rooms, sales, treatments, weights]);
 
-  const { management, financial, roomOccupancy, animalPerformance } = analytics;
+  const { management, financial, roomOccupancy, animalPerformance, treatments: treatmentAnalytics } = analytics;
 
   return (
     <div className="analytics-page">
@@ -352,6 +426,8 @@ export default function AnalyticsDashboard({ assignments, dashboard, inventory, 
       </section>
 
       <AnimalPerformance animalPerformance={animalPerformance} />
+
+      <TreatmentAnalytics treatments={treatmentAnalytics} />
     </div>
   );
 }

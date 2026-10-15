@@ -244,7 +244,53 @@ function buildRoomAnalytics(rooms, assignments, weights) {
   };
 }
 
-export function buildAnalytics({ assignments = [], dashboard = {}, purchases = [], rooms = [], sales = [], inventory = [], weights = [] }, now = new Date()) {
+function buildTreatmentAnalytics(treatments, now) {
+  const today = now.toISOString().slice(0, 10);
+  const treatedTags = new Set();
+  const byMedicine = new Map();
+  let totalCost = 0;
+  let upcomingFollowUps = 0;
+
+  for (const treatment of treatments) {
+    const tag = String(treatment.animalTag || '').trim();
+    if (tag) treatedTags.add(tag.toLocaleLowerCase());
+    totalCost += number(treatment.treatmentCost);
+
+    const medicineName = String(treatment.medicine || '').trim() || 'Unspecified';
+    const key = medicineName.toLocaleLowerCase();
+    const current = byMedicine.get(key) || { name: medicineName, count: 0, cost: 0 };
+    current.count += 1;
+    current.cost += number(treatment.treatmentCost);
+    byMedicine.set(key, current);
+
+    if (treatment.followUpDate && String(treatment.followUpDate) >= today) {
+      upcomingFollowUps += 1;
+    }
+  }
+
+  const medicines = [...byMedicine.values()]
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+
+  const recent = treatments
+    .slice()
+    .sort((a, b) => String(b.treatmentDate).localeCompare(String(a.treatmentDate)) || number(b.id) - number(a.id))
+    .slice(0, 10);
+
+  return {
+    recent,
+    medicines,
+    summary: {
+      treatmentCount: treatments.length,
+      treatedAnimalCount: treatedTags.size,
+      totalCost,
+      averageCost: treatments.length > 0 ? totalCost / treatments.length : null,
+      upcomingFollowUps,
+      medicineCount: medicines.filter((medicine) => medicine.name !== 'Unspecified').length,
+    },
+  };
+}
+
+export function buildAnalytics({ assignments = [], dashboard = {}, purchases = [], rooms = [], sales = [], inventory = [], weights = [], treatments = [] }, now = new Date()) {
   const totalPurchased = number(dashboard.totalPurchased);
   const totalSold = number(dashboard.totalSold);
   const currentStock = number(dashboard.currentStock);
@@ -280,5 +326,6 @@ export function buildAnalytics({ assignments = [], dashboard = {}, purchases = [
     },
     roomOccupancy: buildRoomAnalytics(rooms, assignments, weights),
     animalPerformance: buildAnimals(weights),
+    treatments: buildTreatmentAnalytics(treatments, now),
   };
 }

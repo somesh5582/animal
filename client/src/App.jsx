@@ -1153,7 +1153,7 @@ export default function App({ currentUser, onLogout }) {
           ) : (
             <>
               {activePage === 'dashboard' && <Dashboard canManage={canManage} dashboard={dashboard} inventory={inventory} onAddPurchase={() => openPurchase()} onAddSale={() => setModal('sale')} purchases={purchases} sales={sales} />}
-              {activePage === 'analytics' && canAccess('analytics') && <AnalyticsDashboard assignments={roomAssignments} dashboard={dashboard} inventory={inventory} purchases={purchases} rooms={rooms} sales={sales} weights={weights} />}
+              {activePage === 'analytics' && canAccess('analytics') && <AnalyticsDashboard assignments={roomAssignments} dashboard={dashboard} inventory={inventory} purchases={purchases} rooms={rooms} sales={sales} treatments={treatments} weights={weights} />}
               {activePage === 'purchases' && canAccess('purchases') && <PurchasesPage canManage={canManage} onAdd={() => openPurchase()} onDelete={removePurchase} onEdit={openPurchase} purchases={purchases} />}
               {activePage === 'sales' && canAccess('sales') && <SalesPage canManage={canManage} onAdd={inventory.length > 0 ? () => setModal('sale') : null} onDelete={removeSale} onViewInvoice={setInvoiceSale} sales={sales} />}
               {activePage === 'expenditures' && canAccess('expenditures') && <ExpenditurePage canManage={canManage} expenditures={expenditures} onAdd={() => openExpenditure()} onDelete={removeExpenditure} onEdit={openExpenditure} />}
