@@ -112,7 +112,7 @@ function FilterField({ label, children }) {
   );
 }
 
-function ReportFilters({ type, filters, onChange, onApply, onClear, busy }) {
+function ReportFilters({ type, filters, onChange, onApply, onClear, busy, purposeOptions = [] }) {
   const change = (event) => onChange(event.target.name, event.target.value);
 
   return (
@@ -146,7 +146,7 @@ function ReportFilters({ type, filters, onChange, onApply, onClear, busy }) {
             <input name="customer" onChange={change} placeholder="Any customer" value={filters.customer} />
           </FilterField>
         )}
-        {type !== REPORT_TYPES.weight && (
+        {(type === REPORT_TYPES.purchase || type === REPORT_TYPES.sales) && (
           <>
             <FilterField label="Species">
               <input name="species" onChange={change} placeholder="Any species" value={filters.species} />
@@ -186,7 +186,12 @@ function ReportFilters({ type, filters, onChange, onApply, onClear, busy }) {
         {type === REPORT_TYPES.expenditure && (
           <>
             <FilterField label="Purpose">
-              <input name="purpose" onChange={change} placeholder="Any purpose" value={filters.purpose} />
+              <select name="purpose" onChange={change} value={filters.purpose}>
+                <option value="">All purposes</option>
+                {purposeOptions.map((purpose) => (
+                  <option key={purpose} value={purpose}>{purpose}</option>
+                ))}
+              </select>
             </FilterField>
             <FilterField label="Paid to">
               <input name="paidTo" onChange={change} placeholder="Any payee" value={filters.paidTo} />
@@ -457,6 +462,7 @@ export default function ReportsPage() {
     expenditure: emptyFilters(REPORT_TYPES.expenditure),
   }));
   const [reportsByType, setReportsByType] = useState({});
+  const [purposeOptions, setPurposeOptions] = useState([]);
   const [status, setStatus] = useState('idle');
   const [error, setError] = useState('');
   const requestId = useRef(0);
@@ -499,14 +505,28 @@ export default function ReportsPage() {
     }
   }, []);
 
+  // Distinct purposes from all expenditures, for the Expense report's dropdown.
+  const loadPurposeOptions = useCallback(async () => {
+    try {
+      const rows = await retrieveRows(REPORT_TYPES.expenditure);
+      if (!mounted.current) return;
+      const purposes = [...new Set(rows.map((row) => row.purpose).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b));
+      setPurposeOptions(purposes);
+    } catch {
+      // Non-fatal: the dropdown just stays empty if this fails.
+    }
+  }, []);
+
   useEffect(() => {
     mounted.current = true;
     loadReport(REPORT_TYPES.purchase, emptyFilters(REPORT_TYPES.purchase));
+    loadPurposeOptions();
     return () => {
       mounted.current = false;
       requestId.current += 1;
     };
-  }, [loadReport]);
+  }, [loadReport, loadPurposeOptions]);
 
   const filters = filtersByType[type];
   const report = reportsByType[type] || null;
@@ -518,6 +538,7 @@ export default function ReportsPage() {
     setType(nextType);
     setError('');
     loadReport(nextType, filtersByType[nextType]);
+    if (nextType === REPORT_TYPES.expenditure) loadPurposeOptions();
   }
 
   function updateFilter(name, value) {
@@ -581,6 +602,7 @@ export default function ReportsPage() {
           onApply={applyFilters}
           onChange={updateFilter}
           onClear={clearFilters}
+          purposeOptions={purposeOptions}
           type={type}
         />
       </section>

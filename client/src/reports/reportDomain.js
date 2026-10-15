@@ -191,7 +191,7 @@ export function deriveShedConstructionReport(sourceRows, filters) {
 export function deriveExpenditureReport(sourceRows, filters) {
   const rows = sourceRows
     .filter((row) => matchesDate(row.expenditureDate, filters)
-      && includesText(row.purpose, filters.purpose)
+      && (!filters.purpose || equalsText(row.purpose, filters.purpose))
       && includesText(row.paidTo, filters.paidTo))
     .slice()
     .sort(descendingBy('expenditureDate'));
