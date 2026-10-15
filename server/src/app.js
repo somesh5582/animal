@@ -51,6 +51,7 @@ import {
   listTreatments,
   listWeights,
   moveRoomAssignment,
+  updateExpenditure,
   updatePurchase,
   updateRoom,
   updateTag,
@@ -760,6 +761,14 @@ app.get('/api/expenditures', requireModuleAccess('expenditures'), async (_reques
 app.post('/api/expenditures', requireAdmin, async (request, response) => {
   const expenditure = await createExpenditure(parseExpenditure(request.body));
   response.status(201).json(expenditure);
+});
+
+app.patch('/api/expenditures/:id', requireAdmin, async (request, response) => {
+  const expenditure = await updateExpenditure(
+    parseId(request.params.id),
+    parseExpenditure(request.body),
+  );
+  response.json(expenditure);
 });
 
 app.delete('/api/expenditures/:id', requireAdmin, async (request, response) => {

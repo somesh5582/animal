@@ -788,6 +788,7 @@ export default function App({ currentUser, onLogout }) {
   const [roomInitial, setRoomInitial] = useState({});
   const [roomAssignmentInitial, setRoomAssignmentInitial] = useState({});
   const [purchaseInitial, setPurchaseInitial] = useState(null);
+  const [expenditureInitial, setExpenditureInitial] = useState({});
   const [tagInitial, setTagInitial] = useState({});
   const [userModal, setUserModal] = useState(null);
   const [userRefreshKey, setUserRefreshKey] = useState(0);
@@ -919,10 +920,21 @@ export default function App({ currentUser, onLogout }) {
     }
   }
 
-  async function addExpenditure(expenditure) {
-    await api.createExpenditure(expenditure);
+  function openExpenditure(initial = {}) {
+    setExpenditureInitial(initial);
+    setModal('expenditure');
+  }
+
+  async function saveExpenditure(expenditure) {
+    if (expenditureInitial.id) {
+      await api.updateExpenditure(expenditureInitial.id, expenditure);
+      setNotice('Expenditure updated.');
+    } else {
+      await api.createExpenditure(expenditure);
+      setNotice('Expenditure recorded.');
+    }
     setModal(null);
-    setNotice('Expenditure recorded.');
+    setExpenditureInitial({});
     await loadData();
   }
 
@@ -1092,7 +1104,7 @@ export default function App({ currentUser, onLogout }) {
       : activePage === 'sales'
       ? { label: 'Record sale', action: () => setModal('sale'), disabled: inventory.length === 0 }
       : activePage === 'expenditures'
-        ? { label: 'Add expenditure', action: () => setModal('expenditure') }
+        ? { label: 'Add expenditure', action: () => openExpenditure() }
         : activePage === 'shed-constructions'
           ? { label: 'Add construction cost', action: () => setModal('shed-construction') }
         : activePage === 'rooms'
@@ -1144,7 +1156,7 @@ export default function App({ currentUser, onLogout }) {
               {activePage === 'analytics' && canAccess('analytics') && <AnalyticsDashboard assignments={roomAssignments} dashboard={dashboard} inventory={inventory} purchases={purchases} rooms={rooms} sales={sales} weights={weights} />}
               {activePage === 'purchases' && canAccess('purchases') && <PurchasesPage canManage={canManage} onAdd={() => openPurchase()} onDelete={removePurchase} onEdit={openPurchase} purchases={purchases} />}
               {activePage === 'sales' && canAccess('sales') && <SalesPage canManage={canManage} onAdd={inventory.length > 0 ? () => setModal('sale') : null} onDelete={removeSale} onViewInvoice={setInvoiceSale} sales={sales} />}
-              {activePage === 'expenditures' && canAccess('expenditures') && <ExpenditurePage canManage={canManage} expenditures={expenditures} onAdd={() => setModal('expenditure')} onDelete={removeExpenditure} />}
+              {activePage === 'expenditures' && canAccess('expenditures') && <ExpenditurePage canManage={canManage} expenditures={expenditures} onAdd={() => openExpenditure()} onDelete={removeExpenditure} onEdit={openExpenditure} />}
               {activePage === 'shed-constructions' && canAccess('shed-constructions') && <ShedConstructionPage canManage={canManage} entries={shedConstructions} onAdd={() => setModal('shed-construction')} onDelete={removeShedConstruction} />}
               {activePage === 'inventory' && canAccess('inventory') && <InventoryPage canManage={canManage} inventory={inventory} onAddPurchase={() => openPurchase()} onAddSale={(batchId) => setModal(`sale:${batchId}`)} />}
               {activePage === 'rooms' && canAccess('rooms') && <RoomsPage assignments={roomAssignments} canManage={canManage} inventory={inventory} onAddRoom={() => openRoom()} onAssign={openRoomAssignment} onDeleteRoom={removeRoom} onEditRoom={openRoom} onMove={openRoomAssignment} onUnassign={unassignRoom} rooms={rooms} weights={weights} />}
@@ -1179,7 +1191,7 @@ export default function App({ currentUser, onLogout }) {
                         : modal === 'room-assignment'
                           ? <RoomAssignmentForm assignments={roomAssignments} initial={roomAssignmentInitial} inventory={inventory} onClose={() => setModal(null)} onSubmit={saveRoomAssignment} rooms={rooms} treatments={treatments} weights={weights} />
                           : modal === 'expenditure'
-                            ? <ExpenditureForm onClose={() => setModal(null)} onSubmit={addExpenditure} />
+                            ? <ExpenditureForm initial={expenditureInitial} onClose={() => { setModal(null); setExpenditureInitial({}); }} onSubmit={saveExpenditure} />
                             : modal === 'shed-construction'
                               ? <ShedConstructionForm onClose={() => setModal(null)} onSubmit={addShedConstruction} />
                               : modal === 'tag'

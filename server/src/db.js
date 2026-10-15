@@ -1157,6 +1157,25 @@ export async function createExpenditure(expenditure) {
   return get(`${expenditureSelect} WHERE id = ?`, [result.insertId]);
 }
 
+export async function updateExpenditure(id, expenditure) {
+  const current = await get(`${expenditureSelect} WHERE id = ?`, [id]);
+  if (!current) {
+    const error = new Error('Expenditure not found.');
+    error.status = 404;
+    throw error;
+  }
+  await run(
+    `UPDATE expenditures
+     SET expenditure_date = ?, purpose = ?, paid_to = ?, amount = ?, remarks = ?
+     WHERE id = ?`,
+    [
+      expenditure.expenditureDate, expenditure.purpose, expenditure.paidTo,
+      expenditure.amount, expenditure.remarks, id,
+    ],
+  );
+  return get(`${expenditureSelect} WHERE id = ?`, [id]);
+}
+
 export async function deleteExpenditure(id) {
   const result = await run('DELETE FROM expenditures WHERE id = ?', [id]);
   return result.affectedRows > 0;

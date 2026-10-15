@@ -110,6 +110,10 @@ export const api = {
     method: 'POST',
     body: JSON.stringify(expenditure),
   }),
+  updateExpenditure: (id, expenditure) => request(`/api/expenditures/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(expenditure),
+  }),
   deleteExpenditure: (id) => request(`/api/expenditures/${id}`, {
     method: 'DELETE',
   }),

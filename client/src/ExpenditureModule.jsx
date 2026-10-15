@@ -46,7 +46,7 @@ function SummaryCard({ icon, label, note, value, tone = '' }) {
   );
 }
 
-export function ExpenditurePage({ canManage, expenditures, onAdd, onDelete }) {
+export function ExpenditurePage({ canManage, expenditures, onAdd, onDelete, onEdit }) {
   const currentDate = today();
   const monthPrefix = currentDate.slice(0, 7);
   const [filters, setFilters] = useState({ startDate: '', endDate: '', query: '' });
@@ -117,7 +117,7 @@ export function ExpenditurePage({ canManage, expenditures, onAdd, onDelete }) {
                   <td>{entry.paidTo}</td>
                   <td><strong className="expenditure-amount">{formatMoney(entry.amount)}</strong></td>
                   <td><span className="expenditure-remarks">{entry.remarks || '—'}</span></td>
-                  {canManage && <td><button aria-label={`Delete expenditure ${entry.id}`} className="icon-button" onClick={() => onDelete(entry)} title="Delete expenditure" type="button"><Icon name="trash" size={17} /></button></td>}
+                  {canManage && <td><div className="row-actions"><button className="button button--soft" onClick={() => onEdit(entry)} title="Edit expenditure" type="button">Edit</button><button aria-label={`Delete expenditure ${entry.id}`} className="icon-button" onClick={() => onDelete(entry)} title="Delete expenditure" type="button"><Icon name="trash" size={17} /></button></div></td>}
                 </tr>
               ))}</tbody>
             </table>
@@ -132,8 +132,15 @@ function Field({ className = '', hint, label, children }) {
   return <label className={`field ${className}`}><span>{label}{hint && <small>{hint}</small>}</span>{children}</label>;
 }
 
-export function ExpenditureForm({ onClose, onSubmit }) {
-  const [form, setForm] = useState({ expenditureDate: today(), purpose: '', paidTo: '', amount: '', remarks: '' });
+export function ExpenditureForm({ initial = {}, onClose, onSubmit }) {
+  const isEdit = Boolean(initial.id);
+  const [form, setForm] = useState({
+    expenditureDate: initial.expenditureDate || today(),
+    purpose: initial.purpose || '',
+    paidTo: initial.paidTo || '',
+    amount: initial.amount == null ? '' : String(initial.amount),
+    remarks: initial.remarks || '',
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const change = (event) => setForm((current) => ({ ...current, [event.target.name]: event.target.value }));
@@ -152,7 +159,7 @@ export function ExpenditureForm({ onClose, onSubmit }) {
 
   return (
     <form onSubmit={submit}>
-      <div className="modal__header"><div><span className="eyebrow">Operating expense</span><h2>Add day-to-day expenditure</h2><p>Record who was paid, why, and the amount spent.</p></div><button aria-label="Close" className="icon-button" onClick={onClose} type="button"><Icon name="close" /></button></div>
+      <div className="modal__header"><div><span className="eyebrow">Operating expense</span><h2>{isEdit ? 'Edit expenditure' : 'Add day-to-day expenditure'}</h2><p>{isEdit ? 'Update this expenditure entry.' : 'Record who was paid, why, and the amount spent.'}</p></div><button aria-label="Close" className="icon-button" onClick={onClose} type="button"><Icon name="close" /></button></div>
       <div className="modal__body">
         {error && <div className="form-error"><Icon name="alert" size={17} />{error}</div>}
         <div className="form-grid">
@@ -164,7 +171,7 @@ export function ExpenditureForm({ onClose, onSubmit }) {
         </div>
         <div className="calculation-strip expenditure-amount-strip"><span>Expenditure amount</span><strong>{formatMoney(form.amount)}</strong></div>
       </div>
-      <div className="modal__footer"><button className="button button--ghost" onClick={onClose} type="button">Cancel</button><button className="button button--primary" disabled={saving} type="submit">{saving ? 'Saving…' : 'Save expenditure'} <Icon name="check" size={17} /></button></div>
+      <div className="modal__footer"><button className="button button--ghost" onClick={onClose} type="button">Cancel</button><button className="button button--primary" disabled={saving} type="submit">{saving ? 'Saving…' : (isEdit ? 'Save changes' : 'Save expenditure')} <Icon name="check" size={17} /></button></div>
     </form>
   );
 }
