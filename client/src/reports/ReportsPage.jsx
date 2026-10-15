@@ -28,6 +28,7 @@ const reportOptions = [
   { type: REPORT_TYPES.sales, label: 'Sales', icon: 'sales' },
   { type: REPORT_TYPES.weight, label: 'Animal weights', icon: 'weight' },
   { type: REPORT_TYPES.shedConstruction, label: 'Shed construction', icon: 'room' },
+  { type: REPORT_TYPES.expenditure, label: 'Expenses', icon: 'expenditure' },
 ];
 
 const filterLabels = {
@@ -42,6 +43,7 @@ const filterLabels = {
   category: 'Category',
   shedName: 'Shed',
   paidTo: 'Paid to',
+  purpose: 'Purpose',
 };
 
 function formatMoney(value) {
@@ -77,6 +79,7 @@ async function retrieveRows(type) {
   if (type === REPORT_TYPES.sales) return api.getSales();
   if (type === REPORT_TYPES.weight) return api.getWeights();
   if (type === REPORT_TYPES.shedConstruction) return api.getShedConstructions();
+  if (type === REPORT_TYPES.expenditure) return api.getExpenditures();
   throw new Error('Unknown report type.');
 }
 
@@ -180,6 +183,16 @@ function ReportFilters({ type, filters, onChange, onApply, onClear, busy }) {
             </FilterField>
           </>
         )}
+        {type === REPORT_TYPES.expenditure && (
+          <>
+            <FilterField label="Purpose">
+              <input name="purpose" onChange={change} placeholder="Any purpose" value={filters.purpose} />
+            </FilterField>
+            <FilterField label="Paid to">
+              <input name="paidTo" onChange={change} placeholder="Any payee" value={filters.paidTo} />
+            </FilterField>
+          </>
+        )}
       </div>
       <div className="report-filter-actions">
         <button className="button button--ghost" disabled={busy} onClick={onClear} type="button">Clear filters</button>
@@ -263,6 +276,22 @@ function ReportSummary({ report }) {
     );
   }
 
+  if (report.type === REPORT_TYPES.expenditure) {
+    return (
+      <section className="report-summary-grid report-summary-grid--four" aria-label="Expense report summary">
+        <SummaryCard icon="reports" label="Expense records" value={formatNumber(report.summary.recordCount)} />
+        <SummaryCard icon="wallet" label="Total spent" tone="sand" value={formatMoney(report.summary.totalAmount)} />
+        <SummaryCard icon="expenditure" label="Purposes" value={formatNumber(report.summary.purposeCount)} />
+        <SummaryCard
+          icon="trending"
+          label="Top purpose"
+          note={report.summary.topPurpose ? formatMoney(report.summary.topPurpose.amount) : undefined}
+          value={report.summary.topPurpose ? report.summary.topPurpose.purpose : '—'}
+        />
+      </section>
+    );
+  }
+
   return (
     <section className="report-summary-grid report-summary-grid--four" aria-label="Animal weight report summary">
       <SummaryCard icon="reports" label="Measurements" value={formatNumber(report.summary.recordCount)} />
@@ -338,6 +367,19 @@ function ShedConstructionRows({ rows }) {
   ));
 }
 
+function ExpenditureRows({ rows }) {
+  return rows.map((row) => (
+    <tr key={row.id}>
+      <td><strong>#{String(row.id).padStart(3, '0')}</strong></td>
+      <td>{formatDate(row.expenditureDate)}</td>
+      <td><strong>{row.purpose}</strong></td>
+      <td>{row.paidTo}</td>
+      <td><strong>{formatMoney(row.amount)}</strong></td>
+      <td><span className="table-notes">{row.remarks || '—'}</span></td>
+    </tr>
+  ));
+}
+
 function WeightRows({ rows }) {
   return rows.map((row) => (
     <tr key={row.id}>
@@ -360,7 +402,9 @@ function ReportTable({ report }) {
       ? ['Sale', 'Sale date', 'Customer', 'Source batch', 'Species', 'Breed', 'Quantity', 'Unit price', 'Revenue', 'Cost', 'Profit']
       : report.type === REPORT_TYPES.shedConstruction
         ? ['Record', 'Date', 'Shed', 'Category', 'Paid to', 'Amount', 'Remarks']
-        : ['Animal ID / tag', 'Measurement date', 'Frequency', 'Weight', 'Source batch', 'Species', 'Breed', 'Notes'];
+        : report.type === REPORT_TYPES.expenditure
+          ? ['Record', 'Date', 'Purpose', 'Paid to', 'Amount', 'Remarks']
+          : ['Animal ID / tag', 'Measurement date', 'Frequency', 'Weight', 'Source batch', 'Species', 'Breed', 'Notes'];
 
   return (
     <section className="panel report-table-panel">
@@ -375,6 +419,7 @@ function ReportTable({ report }) {
             {report.type === REPORT_TYPES.purchase && <PurchaseRows rows={report.rows} />}
             {report.type === REPORT_TYPES.sales && <SalesRows rows={report.rows} />}
             {report.type === REPORT_TYPES.shedConstruction && <ShedConstructionRows rows={report.rows} />}
+            {report.type === REPORT_TYPES.expenditure && <ExpenditureRows rows={report.rows} />}
             {report.type === REPORT_TYPES.weight && <WeightRows rows={report.rows} />}
           </tbody>
         </table>
@@ -409,6 +454,7 @@ export default function ReportsPage() {
     sales: emptyFilters(REPORT_TYPES.sales),
     weight: emptyFilters(REPORT_TYPES.weight),
     shedConstruction: emptyFilters(REPORT_TYPES.shedConstruction),
+    expenditure: emptyFilters(REPORT_TYPES.expenditure),
   }));
   const [reportsByType, setReportsByType] = useState({});
   const [status, setStatus] = useState('idle');
